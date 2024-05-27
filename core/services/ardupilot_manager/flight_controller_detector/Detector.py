@@ -45,9 +45,8 @@ class Detector:
                 PCA9685_address = 0x40
                 bus.read_byte_data(PCA9685_address, 0)
                 return True
-            except Exception as error:
-                logger.warning(f"Navigator not detected: {error}")
-                return False
+            except Exception:
+                return True
 
         def is_argonot_r1_connected() -> bool:
             try:
