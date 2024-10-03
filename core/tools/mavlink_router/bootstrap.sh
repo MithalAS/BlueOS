@@ -4,8 +4,8 @@
 set -e
 
 VERSION="v4"
-REPOSITORY_ORG="mavlink-router"
-REPOSITORY_NAME="$REPOSITORY_ORG"
+REPOSITORY_ORG="goasChris"
+REPOSITORY_NAME="mavlink-router"
 PROJECT_NAME="mavlink-routerd"
 REPOSITORY_URL="https://github.com/$REPOSITORY_ORG/$REPOSITORY_NAME"
 
