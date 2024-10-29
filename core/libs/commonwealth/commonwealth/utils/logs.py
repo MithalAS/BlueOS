@@ -1,4 +1,6 @@
 import logging
+import os
+import time
 from datetime import datetime, timezone
 from logging import LogRecord
 from pathlib import Path
@@ -74,3 +76,21 @@ def stack_trace_message(error: BaseException) -> str:
         message = f"{message} {sub_error}"
         sub_error = sub_error.__cause__
     return message
+
+
+def cleanup_old_tlogs(log_directory: str, days_to_keep: int = 7) -> None:
+    """Delete .tlog files older than a specified number of days and are read-only."""
+    seconds_in_a_day = 86400
+    now = time.time()
+    cutoff = now - (days_to_keep * seconds_in_a_day)
+
+    for filename in os.listdir(log_directory):
+        if not filename.endswith(".tlog"):
+            continue
+
+        file_path = os.path.join(log_directory, filename)
+        if os.path.isfile(file_path):
+            file_mtime = os.path.getmtime(file_path)
+            if file_mtime < cutoff and not os.access(file_path, os.W_OK):
+                os.remove(file_path)
+                logger.info(f"Deleted old log file: {filename}")
