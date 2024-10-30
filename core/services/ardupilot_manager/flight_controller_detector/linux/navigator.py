@@ -79,3 +79,37 @@ class NavigatorPi4(Navigator):
         if self.is_pi5():
             return False
         return all(self.check_for_i2c_device(bus, address) for address, bus in self.devices.values())
+
+
+class NaviCube(Navigator):
+    devices = {
+        "UART": (0x35, 6),
+    }
+
+    def get_serials(self) -> List[Serial]:
+        release = "Bullseye"
+        os_release = load_file("/etc/os-release")
+        if "bookworm" in os_release:
+            release = "Bookworm"
+
+        match release:
+            case "Bullseye":
+                return [
+                    Serial(port="C", endpoint="/dev/ttyS0"),
+                    Serial(port="B", endpoint="/dev/ttyAMA1"),
+                    Serial(port="E", endpoint="/dev/ttyAMA2"),
+                    Serial(port="F", endpoint="/dev/ttyAMA3"),
+                ]
+            case "Bookworm":
+                return [
+                    Serial(port="C", endpoint="/dev/ttyS0"),
+                    Serial(port="B", endpoint="/dev/ttyAMA3"),
+                    Serial(port="E", endpoint="/dev/ttyAMA4"),
+                    Serial(port="F", endpoint="/dev/ttyAMA5"),
+                ]
+        raise RuntimeError("Unknown release, unable to map ports")
+
+    def detect(self) -> bool:
+        if self.is_pi5():
+            return False
+        return all(self.check_for_i2c_device(bus, address) for address, bus in self.devices.values())
