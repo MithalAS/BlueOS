@@ -84,6 +84,9 @@ class NavigatorPi4(Navigator):
 class NaviCube(Navigator):
     devices = {
         "UART": (0x35, 6),
+        # "KellerLD": (0x40, 6),
+        # "LIS3MDL": (0x81, 1), # ???
+        # "MMC5983": (0x13, 1) # ???
     }
 
     def get_serials(self) -> List[Serial]:
@@ -95,10 +98,14 @@ class NaviCube(Navigator):
         match release:
             case "Bullseye":
                 return [
-                    Serial(port="C", endpoint="/dev/ttyS0"),
+                    Serial(port="C", endpoint="/dev/ttyAMA0"),
                     Serial(port="B", endpoint="/dev/ttyAMA1"),
                     Serial(port="E", endpoint="/dev/ttyAMA2"),
                     Serial(port="F", endpoint="/dev/ttyAMA3"),
+                    Serial(
+                        port="H",
+                        endpoint="/dev/serial/by-path/platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.3:1.0-port0",
+                    ),
                 ]
             case "Bookworm":
                 return [
