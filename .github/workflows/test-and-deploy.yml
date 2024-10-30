@@ -307,8 +307,13 @@ jobs:
           LOOP_DEVICE=$(sudo kpartx -avs deploy/pimod/blueos.img | sed -E 's/.*(loop[0-9]+)p[0-9]+.*/\1/g' | head -1)
           # Mount the boot partition
           sudo mount "/dev/mapper/${LOOP_DEVICE}p1" /mnt/piboot
-          # Create ssh and userconf files
+          unzip xrm117_kernel_patch.zip
+          # Create ssh and userconf files|
           sudo cp install/boards/config.toml /mnt/piboot/custom.toml
+          # Copy custom kernel files
+          sudo cp customBoot/zImage /mnt/piboot/kernel7l.img
+          sudo cp customBoot/*.dtb /mnt/piboot/
+          sudo cp customBoot/overlays/* /mnt/piboot/overlays/
           sudo umount /mnt/piboot
           sudo kpartx -d deploy/pimod/blueos.img
           echo "Boot partition updated successfully."
