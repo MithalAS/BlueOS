@@ -98,9 +98,9 @@ class NavigatorPi4(Navigator):
 
 class NaviCube(Navigator):
     devices = {
-        "UART": (0x35, 6),
+        # "UART": (0x35, 6), #  this wont work, always busy by driver
         # "KellerLD": (0x40, 6),
-        # "LIS3MDL": (0x81, 1), # ???
+        "LIS3MDL": (0x1C, 1),
         # "MMC5983": (0x13, 1) # ???
     }
 
