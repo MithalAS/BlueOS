@@ -20,10 +20,13 @@ class LinuxFlightController(FlightController):
 
     def check_for_i2c_device(self, bus_number: int, address: int) -> bool:
         try:
+            print(f"Trying to read from bus {bus_number}, address {address}")
             bus = SMBus(bus_number)
             bus.read_byte_data(address, 0)
+            print(f"Successfully read from bus {bus_number}, address {address}")
             return True
-        except OSError:
+        except OSError as e:
+            print(f"Failed to read from bus {bus_number}, address {address}: {e}")
             return False
 
     @classmethod
