@@ -250,6 +250,30 @@ rm -rf /var/lib/systemd/random-seed /loader/random-seed
 echo "creating dns link"
 sudo ln /etc/resolv.conf /etc/resolv.conf.host
 
+# chris hacks kernel
+KERNEL_VERSION="5.10.110-v7l+"
+STATUS_FILE="$HOME/kernel_install_status.txt"
+wget "https://github.com/MithalAS/BlueOS/raw/refs/heads/beta-ci-image/linux-image-${KERNEL_VERSION}-2_armhf.deb"
+
+# Install the kernel
+if sudo dpkg -i linux-image-${KERNEL_VERSION}-2_armhf.deb; then
+    echo "Kernel package installed successfully." > "$STATUS_FILE"
+else
+    echo "Kernel package installation failed." > "$STATUS_FILE"
+    exit 1
+fi
+
+# Verify modules directory in /lib/modules
+if [[ -d "/lib/modules/${KERNEL_VERSION}" ]]; then
+    echo "Modules directory exists for kernel ${KERNEL_VERSION}." >> "$STATUS_FILE"
+    echo "Kernel installation and preparation successful. Safe to reboot." >> "$STATUS_FILE"
+else
+    echo "Modules directory missing for kernel ${KERNEL_VERSION}. Aborting reboot." >> "$STATUS_FILE"
+    exit 1
+fi
+
+echo "Kernel installation and preparation successful. Safe to reboot." >> "$STATUS_FILE"
+
 echo "Installation finished successfully."
 echo "You can access after the reboot:"
 echo "- The computer webpage: http://blueos-avahi.local"
