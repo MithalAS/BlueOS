@@ -1,5 +1,6 @@
 import logging
 import os
+import stat
 import time
 from datetime import datetime, timezone
 from logging import LogRecord
@@ -91,6 +92,6 @@ def cleanup_old_tlogs(log_directory: str, days_to_keep: int = 7) -> None:
         file_path = os.path.join(log_directory, filename)
         if os.path.isfile(file_path):
             file_mtime = os.path.getmtime(file_path)
-            if file_mtime < cutoff and not os.access(file_path, os.W_OK):
+            if file_mtime < cutoff and not os.stat(file_path).st_mode & stat.S_IWUSR:
                 os.remove(file_path)
                 logger.info(f"Deleted old log file: {filename}")
