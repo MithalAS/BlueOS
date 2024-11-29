@@ -258,25 +258,33 @@ sudo ln --force /etc/resolv.conf /etc/resolv.conf.host
 
 # chris hacks kernel
 KERNEL_VERSION="5.10.110-v7l+"
+COMPILE_VER="2"
 STATUS_FILE="$HOME/kernel_install_status.txt"
-wget "https://github.com/MithalAS/BlueOS/raw/refs/heads/beta-ci-image/linux-image-${KERNEL_VERSION}-2_armhf.deb"
+wget "https://github.com/MithalAS/BlueOS/raw/refs/heads/beta-ci-image/linux-image-${KERNEL_VERSION}-${COMPILE_VER}_armhf.deb"
 
 # Install the kernel
-if sudo dpkg -i linux-image-${KERNEL_VERSION}-2_armhf.deb; then
+if sudo dpkg -i linux-image-${KERNEL_VERSION}-${COMPILE_VER}_armhf.deb; then
     echo "Kernel package installed successfully." > "$STATUS_FILE"
 else
     echo "Kernel package installation failed." > "$STATUS_FILE"
     exit 1
 fi
 
-# Verify modules directory in /lib/modules
-if [[ -d "/lib/modules/${KERNEL_VERSION}" ]]; then
-    echo "Modules directory exists for kernel ${KERNEL_VERSION}." >> "$STATUS_FILE"
-    echo "Kernel installation and preparation successful. Safe to reboot." >> "$STATUS_FILE"
+# insert kernel=vmlinuz-<version> into /boot/config.txt
+# Check if the kernel entry exists
+if grep -q "^kernel=" /boot/config.txt; then
+    # If it exists, replace it with the new kernel version
+    sudo sed -i "s/^kernel=.*/kernel=vmlinuz-${KERNEL_VERSION}/" /boot/config.txt
 else
-    echo "Modules directory missing for kernel ${KERNEL_VERSION}. Aborting reboot." >> "$STATUS_FILE"
-    exit 1
+    # If it does not exist, add the new kernel entry
+    echo "kernel=vmlinuz-${KERNEL_VERSION}" | sudo tee -a /boot/config.txt
 fi
+
+# manually extract and copy the xrm117x-i2c6.dtbo into /boot/overlays from the .deb file
+mkdir -p /tmp/kernel_install
+dpkg -x linux-image-${KERNEL_VERSION}-${COMPILE_VER}_armhf.deb /tmp/kernel_install
+sudo cp /tmp/kernel_install/usr/lib/linux-image-${KERNEL_VERSION}/overlays/xrm117x-i2c6.dtbo /boot/overlays/
+sudo rm -rf /tmp/kernel_install
 
 echo "Kernel installation and preparation successful. Safe to reboot." >> "$STATUS_FILE"
 
