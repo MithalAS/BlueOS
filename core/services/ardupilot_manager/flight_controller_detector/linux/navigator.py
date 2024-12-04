@@ -102,10 +102,6 @@ class NaviCube(Navigator):
                     Serial(port="B", endpoint="/dev/ttyAMA1"),
                     Serial(port="E", endpoint="/dev/ttyAMA2"),
                     Serial(port="F", endpoint="/dev/ttyAMA3"),
-                    Serial(
-                        port="H",
-                        endpoint="/dev/serial/by-path/platform-fd500000.pcie-pci-0000:01:00.0-usb-0:1.3:1.0-port0",
-                    ),
                 ]
             case "Bookworm":
                 return [
