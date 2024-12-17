@@ -16,8 +16,10 @@ from loguru import logger
 class Bootstrapper:
 
     DEFAULT_FILE_PATH = pathlib.Path("/bootstrap/startup.json.default")
+    BAG_OF_HOLDING_SOURCE_PATH = pathlib.Path("/bootstrap/bag-of-holding")
     DOCKER_CONFIG_PATH = pathlib.Path("/root/.config")
     DOCKER_CONFIG_FILE_PATH = DOCKER_CONFIG_PATH.joinpath("bootstrap/startup.json")
+    BAG_OF_HOLDING_DEST_PATH = DOCKER_CONFIG_PATH.joinpath("blueos/bag-of-holding")
     HOST_CONFIG_PATH = os.environ.get("BLUEOS_CONFIG_PATH", "/tmp/blueos/.config")
     CORE_CONTAINER_NAME = "blueos-core"
     BOOTSTRAP_CONTAINER_NAME = "blueos-bootstrap"
@@ -51,6 +53,7 @@ class Bootstrapper:
             # we don't mind if the file is already there
             pass
         shutil.copy(Bootstrapper.DEFAULT_FILE_PATH, Bootstrapper.DOCKER_CONFIG_FILE_PATH)
+        Bootstrapper.copy_bag_of_holding()
 
     @staticmethod
     def read_config_file() -> Dict[str, Any]:
@@ -82,6 +85,17 @@ class Bootstrapper:
             "mode": "rw",
         }
         return config
+
+    @staticmethod
+    def copy_bag_of_holding() -> None:
+        """Copies the bag-of-holding file to the desired location"""
+        try:
+            os.makedirs(Bootstrapper.BAG_OF_HOLDING_DEST_PATH.parent, exist_ok=True)
+            shutil.copy(Bootstrapper.BAG_OF_HOLDING_SOURCE_PATH, Bootstrapper.BAG_OF_HOLDING_DEST_PATH)
+            logger.info(f"Copied bag-of-holding to {Bootstrapper.BAG_OF_HOLDING_DEST_PATH}")
+        except Exception as exception:
+            logger.error(f"Failed to copy bag-of-holding: {exception}")
+            raise
 
     def bootstrap_version(self) -> str:
         try:
