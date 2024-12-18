@@ -254,7 +254,7 @@ sudo ln /etc/resolv.conf /etc/resolv.conf.host
 KERNEL_VERSION="5.10.110-v7l+"
 COMPILE_VER="2"
 STATUS_FILE="$HOME/kernel_install_status.txt"
-wget "https://github.com/MithalAS/BlueOS/raw/refs/heads/beta-ci-image/linux-image-${KERNEL_VERSION}-${COMPILE_VER}_armhf.deb"
+wget "https://github.com/MithalAS/BlueOS/raw/refs/heads/${VERSION}/linux-image-${KERNEL_VERSION}-${COMPILE_VER}_armhf.deb"
 
 # Install the kernel
 if sudo dpkg -i linux-image-${KERNEL_VERSION}-${COMPILE_VER}_armhf.deb; then
