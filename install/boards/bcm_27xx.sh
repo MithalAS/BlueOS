@@ -42,6 +42,25 @@ fi
 line_number=$(grep -n "\[pi4\]" $CONFIG_FILE | awk -F ":" '{print $1}')
 echo "Line number of [pi4] tag: $line_number"
 
+    # "enable_uart=1" \
+    # "dtoverlay=uart1" \
+    # "dtoverlay=uart3" \
+    # "dtoverlay=uart4" \
+    # "dtoverlay=uart5" \
+    # "dtparam=i2c_vc=on" \
+    # "dtoverlay=i2c1" \
+    # "dtparam=i2c_arm_baudrate=1000000" \
+    # "dtoverlay=i2c4,pins_6_7,baudrate=1000000" \
+    # "dtoverlay=i2c6,pins_22_23,baudrate=400000" \
+    # "dtparam=spi=on" \
+    # "dtoverlay=spi0-led" \
+    # "dtoverlay=spi1-3cs" \
+    # "gpio=11,24,25=op,pu,dh" \
+    # "gpio=37=op,pd,dl" \
+    # "dtoverlay=dwc2,dr_mode=otg" \
+    # "dtoverlay=disable-bt" \
+    # "dtoverlay=xrm117x-i2c6" \
+
 
 for STRING in \
     "enable_uart=1" \
@@ -54,9 +73,10 @@ for STRING in \
     "dtparam=i2c_arm_baudrate=1000000" \
     "dtoverlay=i2c4,pins_6_7,baudrate=1000000" \
     "dtoverlay=i2c6,pins_22_23,baudrate=400000" \
-    "dtparam=spi=on" \
-    "dtoverlay=spi0-led" \
-    "dtoverlay=spi1-3cs" \
+    "dtparam=spi=off" \
+    "dtoverlay=spi1-3cs,cs0_pin=10" \
+    "dtoverlay=adin1110-spi1-cs0-gpio27" \
+    "force_turbo=1" \
     "gpio=11,24,25=op,pu,dh" \
     "gpio=37=op,pd,dl" \
     "dtoverlay=dwc2,dr_mode=otg" \
