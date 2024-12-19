@@ -302,9 +302,6 @@ def update_navigator_overlays() -> bool:
     config_content = load_file(config_file).splitlines()
     unpatched_config_content = config_content.copy()
 
-    # ("dtoverlay=spi0-led", "^dtoverlay=spi0.*"),
-    # check spi and overlay set correctly
-  
     navigator_configs_with_match_patterns = [
         ("enable_uart=1", "^enable_uart=.*"),
         ("dtoverlay=uart1", "^dtoverlay=uart1.*"),
