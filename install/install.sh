@@ -281,7 +281,9 @@ sudo cp /tmp/kernel_install/usr/lib/linux-image-${KERNEL_VERSION}/overlays/xrm11
 
 echo "Installing the DTS file for the ADIN1110 ADC."
 DTBO_PATH="$ROOT/install/overlays"
-sudo cp $DTBO_PATH/adin1110-spi1-cs0-gpio27.dtbo /boot/overlays/
+DTBO_NAME="adin1110"
+curl -fsSL -o /tmp/$DTBO_NAME $DTBO_PATH/$DTBO_NAME.dtbo
+sudo cp /tmp/$DTBO_NAME /boot/overlays/$DTBO_NAME.dtbo
 
 sudo rm -rf /tmp/kernel_install
 
