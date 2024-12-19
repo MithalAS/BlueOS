@@ -278,7 +278,13 @@ fi
 mkdir -p /tmp/kernel_install
 dpkg -x linux-image-${KERNEL_VERSION}-${COMPILE_VER}_armhf.deb /tmp/kernel_install
 sudo cp /tmp/kernel_install/usr/lib/linux-image-${KERNEL_VERSION}/overlays/xrm117x-i2c6.dtbo /boot/overlays/
+
+echo "Installing the DTS file for the ADIN1110 ADC."
+DTBO_PATH="$ROOT/install/overlays"
+sudo cp $DTBO_PATH/adin1110-spi1-cs0-gpio27.dtbo /boot/overlays/
+
 sudo rm -rf /tmp/kernel_install
+
 
 echo "Kernel installation and preparation successful. Safe to reboot." >> "$STATUS_FILE"
 

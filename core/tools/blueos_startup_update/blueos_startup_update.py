@@ -302,6 +302,8 @@ def update_navigator_overlays() -> bool:
     config_content = load_file(config_file).splitlines()
     unpatched_config_content = config_content.copy()
 
+#        ("dtoverlay=spi0-led", "^dtoverlay=spi0.*"),
+# check spi and overlay set correctly   
     navigator_configs_with_match_patterns = [
         ("enable_uart=1", "^enable_uart=.*"),
         ("dtoverlay=uart1", "^dtoverlay=uart1.*"),
@@ -313,8 +315,7 @@ def update_navigator_overlays() -> bool:
         ("dtparam=i2c_arm_baudrate=1000000", "^dtparam=i2c_arm_baudrate.*"),
         ("dtoverlay=i2c4,pins_6_7,baudrate=1000000", "^dtoverlay=i2c4.*"),
         ("dtoverlay=i2c6,pins_22_23,baudrate=400000", "^dtoverlay=i2c6.*"),
-        ("dtparam=spi=on", "^dtparam=spi=.*"),
-        ("dtoverlay=spi0-led", "^dtoverlay=spi0.*"),
+        ("dtparam=spi=off", "^dtparam=spi=.*"),
         ("dtoverlay=spi1-3cs", "^dtoverlay=spi1.*"),
         ("gpio=11,24,25=op,pu,dh", "^gpio=.*((11|24|25),?)+.*"),
         ("gpio=37=op,pd,dl", "^gpio=.*37.*"),
