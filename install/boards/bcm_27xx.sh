@@ -12,9 +12,15 @@ alias curl="curl --retry 6 --max-time 15 --retry-all-errors --retry-delay 20 --c
 
 # Download, compile, and install spi0 mosi-only device tree overlay for
 # neopixel LED on navigator board
-echo "- compile spi0 device tree overlay."
+# echo "- compile spi0 device tree overlay."
+# DTS_PATH="$ROOT/install/overlays"
+# DTS_NAME="spi0-led"
+# curl -fsSL -o /tmp/$DTS_NAME $DTS_PATH/$DTS_NAME.dts
+# dtc -@ -Hepapr -I dts -O dtb -o /boot/overlays/$DTS_NAME.dtbo /tmp/$DTS_NAME
+
+echo "- compile adin1110 device tree overlay."
 DTS_PATH="$ROOT/install/overlays"
-DTS_NAME="spi0-led"
+DTS_NAME="single-pair"
 curl -fsSL -o /tmp/$DTS_NAME $DTS_PATH/$DTS_NAME.dts
 dtc -@ -Hepapr -I dts -O dtb -o /boot/overlays/$DTS_NAME.dtbo /tmp/$DTS_NAME
 

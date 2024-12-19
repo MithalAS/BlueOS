@@ -1,0 +1,80 @@
+/dts-v1/;
+
+/ {
+	compatible = "brcm,bcm2835";
+
+	fragment@0 {
+		target = <0xffffffff>;
+
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@1 {
+		target = <0xffffffff>;
+
+		__overlay__ {
+
+			cs_pin_adin1110 {
+				brcm,pins = <0x06>;
+				brcm,function = <0x00>;
+				brcm,pull = <0x00>;
+				phandle = <0x01>;
+			};
+		};
+	};
+
+	fragment@2 {
+		target = <0xffffffff>;
+
+		__overlay__ {
+			#address-cells = <0x01>;
+			#size-cells = <0x00>;
+			status = "okay";
+
+			ethernet@0 {
+				#address-cells = <0x01>;
+				#size-cells = <0x00>;
+				compatible = "adi,adin1110";
+				reg = <0x00>;
+				pinctrl-names = "default";
+				pinctrl-0 = <0x01>;
+				interrupt-parent = <0xffffffff>;
+				interrupts = <0x18 0x02>;
+				spi-max-frequency = <0x989680>;
+				adi,spi-crc;
+				mac-address = [ca 2f b7 10 23 63];
+				status = "okay";
+
+				phy@0 {
+					compatible = "ethernet-phy-id0283.bc91";
+					reg = <0x00>;
+				};
+			};
+		};
+	};
+
+	__symbols__ {
+		cs_pin_adin1110 = "/fragment@1/__overlay__/cs_pin_adin1110";
+	};
+
+	__fixups__ {
+		spidev1 = "/fragment@0:target:0";
+		gpio = "/fragment@1:target:0\0/fragment@2/__overlay__/ethernet@0:interrupt-parent:0";
+		spi1 = "/fragment@2:target:0";
+	};
+
+	__local_fixups__ {
+
+		fragment@2 {
+
+			__overlay__ {
+
+				ethernet@0 {
+					pinctrl-0 = <0x00>;
+				};
+			};
+		};
+	};
+};
