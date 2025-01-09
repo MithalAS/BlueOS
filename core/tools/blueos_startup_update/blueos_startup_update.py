@@ -305,8 +305,6 @@ def update_navigator_overlays() -> bool:
     navigator_configs_with_match_patterns = [
         ("enable_uart=1", "^enable_uart=.*"),
         ("dtoverlay=uart1", "^dtoverlay=uart1.*"),
-        ("dtoverlay=uart3", "^dtoverlay=uart3.*"),
-        ("dtoverlay=uart5", "^dtoverlay=uart5.*"),
         ("dtparam=i2c_vc=on", "^dtparam=i2c_vc=.*"),
         ("dtoverlay=i2c1", "^dtoverlay=i2c1.*"),
         ("dtparam=i2c_arm_baudrate=1000000", "^dtparam=i2c_arm_baudrate.*"),
