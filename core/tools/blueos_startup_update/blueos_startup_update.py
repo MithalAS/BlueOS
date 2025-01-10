@@ -310,7 +310,6 @@ def update_navigator_overlays() -> bool:
         ("dtparam=i2c_arm_baudrate=1000000", "^dtparam=i2c_arm_baudrate.*"),
         ("dtoverlay=i2c4,pins_6_7,baudrate=1000000", "^dtoverlay=i2c4.*"),
         ("dtoverlay=i2c6,pins_22_23,baudrate=400000", "^dtoverlay=i2c6.*"),
-        ("dtparam=spi=off", "^dtparam=spi=.*"),
         ("dtoverlay=spi1-3cs", "^dtoverlay=spi1.*"),
         ("gpio=11,24,25=op,pu,dh", "^gpio=.*((11|24|25),?)+.*"),
         ("gpio=37=op,pd,dl", "^gpio=.*37.*"),
