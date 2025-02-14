@@ -96,6 +96,9 @@ COPY --from=download-binaries \
 # Copy frontend built on frontend-builder to this stage
 COPY --from=frontend-builder /home/pi/frontend/dist /home/pi/frontend
 
+# Copy our custom param JSON
+COPY frontend/public/assets/ArduPilot-Parameter-Repository/Cust-Rover-4.2/apm.pdef.json /home/pi/source_metadata_override.json
+
 RUN <<-EOF
 set -e
 
