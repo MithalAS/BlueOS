@@ -166,3 +166,19 @@ def save_file(file_name: str, file_content: str, backup_identifier: str, ensure_
     command = f'sudo cp "{file_name}" "{file_name}.{backup_identifier}.bak"'
     run_command(command, False)
     upload_file(file_content, file_name, False)
+
+
+def upload_existing_file(source: str, destination: str, check: bool = True) -> "subprocess.CompletedProcess['str']":
+    temp_file_in_host = "/tmp/uploaded_file"
+    logger.debug(f"Uploading {source} to {destination}")
+    try:
+        ret = upload_file_with_ssh_key(source, temp_file_in_host, check)
+    except KeyNotFound:
+        logger.warning("SSH key not found, falling back to password authentication")
+        ret = upload_file_with_password(source, temp_file_in_host, check)
+    logger.debug(ret)
+    if ret.returncode == 0:
+        run_command(f"sudo mv {temp_file_in_host} {destination}")
+    else:
+        logger.error(f"Failed to upload file: {ret.stderr}")
+    return ret
