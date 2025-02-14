@@ -9,7 +9,7 @@ from typing import List, Tuple
 import configparser
 
 import appdirs
-from commonwealth.utils.commands import run_command, save_file, locate_file, load_file
+from commonwealth.utils.commands import run_command, save_file, locate_file, load_file, upload_existing_file
 from commonwealth.utils.general import HostOs, CpuType, get_cpu_type, get_host_os
 from commonwealth.utils.logs import InterceptHandler, init_logger
 from loguru import logger
@@ -545,6 +545,21 @@ unmanaged-devices=interface:eth0;interface:usb0
     return True
 
 
+def ensure_metadata_override_json() -> bool:
+    logger.info("Ensuring metadata_override.json is in place...")
+    source_file = "/home/pi/source_metadata_override.json"
+    destination_file = "/usr/blueos/userdata/metadata_override.json"
+
+    result = upload_existing_file(source_file, destination_file, check=False)
+
+    if result.returncode != 0:
+        logger.info(f"Copied {source_file} to {destination_file}.")
+        logger.error(f"Failed to copy {source_file} to {destination_file}: {result.stderr}")
+        return False
+
+    return True
+
+
 def main() -> int:
     start = time.time()
     # check if boot_loop_detector exists
@@ -581,6 +596,7 @@ def main() -> int:
         ("dns", create_dns_conf_host_link),
         ("ssh", fix_ssh_ownership),
         ("noIPV6", ensure_ipv6_disabled),
+        ("metadata_override", ensure_metadata_override_json),
     ]
 
     # this will always be pi4 as pi5 is not supported
