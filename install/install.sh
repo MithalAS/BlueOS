@@ -257,8 +257,8 @@ echo "creating dns link"
 sudo ln --force /etc/resolv.conf /etc/resolv.conf.host
 
 # chris hacks kernel
-KERNEL_VERSION="5.10.110-v7l+"
-COMPILE_VER="2"
+KERNEL_VERSION="6.6.74-v7l+"
+COMPILE_VER="g36c29102a157-5"
 STATUS_FILE="$HOME/kernel_install_status.txt"
 wget "https://github.com/MithalAS/BlueOS/raw/refs/heads/${VERSION}/linux-image-${KERNEL_VERSION}-${COMPILE_VER}_armhf.deb"
 
