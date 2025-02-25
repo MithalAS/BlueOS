@@ -43,7 +43,7 @@ if args.default_config == "bluerov2":
         NetworkInterface(
             name="eth0",
             addresses=[
-                InterfaceAddress(ip="192.168.2.2", mode=AddressMode.Server),
+                InterfaceAddress(ip="192.168.2.2", mode=AddressMode.Unmanaged),  # Disable DHCP server
                 InterfaceAddress(ip="0.0.0.0", mode=AddressMode.Client),
             ],
         ),
