@@ -2,8 +2,8 @@
 
 # Set desired version to be installed
 DOCKER_USER="goaschris"  # couldnt work out where to place this var
-VERSION="${VERSION:-master}"
-GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-bluerobotics/BlueOS}
+VERSION="${VERSION:-beta}"
+GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-MithalAS/blueOS}
 DOCKER_USER=${DOCKER_USER:-$(echo $GITHUB_REPOSITORY | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')}
 REMOTE="${REMOTE:-https://raw.githubusercontent.com/${GITHUB_REPOSITORY}}"
 ROOT="$REMOTE/$VERSION"
@@ -204,7 +204,7 @@ command -v raspi-config && (
 echo "Downloading bootstrap"
 BLUEOS_BOOTSTRAP="$DOCKER_USER/blueos-bootstrap:$VERSION" # Use current version
 BLUEOS_CORE="$DOCKER_USER/blueos-core:$VERSION" # We don't have a stable tag yet
-BLUEOS_FACTORY="bluerobotics/blueos-core:factory" # used for "factory reset"
+BLUEOS_FACTORY="$DOCKER_USER/blueos-core:factory" # used for "factory reset"
 
 docker pull $BLUEOS_BOOTSTRAP
 docker pull $BLUEOS_CORE
@@ -254,7 +254,9 @@ echo "Restarting random-seeds."
 rm -rf /var/lib/systemd/random-seed /loader/random-seed
 
 echo "creating dns link"
-sudo ln --force /etc/resolv.conf /etc/resolv.conf.host
+if [ ! -e /etc/resolv.conf.host ]; then
+    sudo ln /etc/resolv.conf /etc/resolv.conf.host
+fi
 
 # chris hacks kernel
 KERNEL_VERSION="5.10.110-v7l+"
