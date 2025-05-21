@@ -14,6 +14,8 @@ Pipfile
 Pipfile.lock
 poetry.lock
 registry/
+venv/
+.pre-commit-config.yaml
 
 # Docker compose binds
 core/compose/workspace/
