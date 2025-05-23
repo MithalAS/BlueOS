@@ -4,6 +4,10 @@ build/
 *.egg-info
 dist/
 node_modules
+*.log
+.pre-commit-config.yaml
+venv/
+
 
 # Avoid local python development
 *__pycache__
