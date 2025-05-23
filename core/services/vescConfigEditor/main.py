@@ -6,10 +6,11 @@ from typing import Any, List
 import uvicorn
 from commonwealth.utils.apis import GenericErrorHandlingRoute
 from commonwealth.utils.logs import InterceptHandler, init_logger
-from fastapi.responses import HTMLResponse
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from fastapi_versioning import VersionedFastAPI, version
 from loguru import logger
+
 from vescConfigEditor.vescConfigEditor import vescConfigEditor
 
 SERVICE_NAME = "vescConfigEditor"
