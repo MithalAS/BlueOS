@@ -11,18 +11,16 @@ from fastapi.responses import HTMLResponse
 from fastapi_versioning import VersionedFastAPI, version
 from loguru import logger
 
-from vescConfigEditor.vescConfigEditor import vescConfigEditor
+from vescConfigEditor import AppConfigData, vescConfigEditor
 
 SERVICE_NAME = "vescConfigEditor"
-LOG_FOLDER_PATH = os.environ.get("BLUEOS_LOG_FOLDER_PATH", "/var/logs/blueos")
-MAVLINK_LOG_FOLDER_PATH = os.environ.get("BLUEOS_MAVLINK_LOG_FOLDER_PATH", "/shortcuts/ardupilot_logs/logs/")
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0)
 init_logger(SERVICE_NAME)
 
 app = FastAPI(
-    title="Commander API",
-    description="Commander is a BlueOS service responsible to abstract simple commands to the frontend.",
+    title="Vesc config editor API",
+    description="Vesc config editor is a service that handles config editing on the motor controllers.",
 )
 app.router.route_class = GenericErrorHandlingRoute
 logger.info("Starting vescConfigEditor!")
@@ -41,10 +39,19 @@ def get_serial_ports() -> Any:
 
 @app.post("/changeTimeout", status_code=200)
 @version(1, 0)
-async def change_timeout(serial_path: str, timeout: int) -> Any:
-    logger.debug(f"Changing timeout to {timeout}.")
-    controller.change_timeout(serial_path, timeout)
-    logger.debug(f"Timeout changed to {timeout}.")
+async def change_timeout(serial_path: str, timeout_seconds: int) -> Any:
+    logger.debug(f"Changing timeout to {timeout_seconds}.")
+    controller.change_timeout(serial_path, timeout_seconds)
+    logger.debug(f"Timeout changed to {timeout_seconds}.")
+
+
+@app.get("/getAppConfig", response_model=AppConfigData)
+@version(1, 0)
+async def get_app_config(serial_path: str) -> AppConfigData:
+    logger.debug(f"Getting app config from {serial_path}.")
+    app_config = controller.get_app_config(serial_path)
+    logger.debug(f"App config retrieved: {app_config}.")
+    return app_config
 
 
 app = VersionedFastAPI(app, version="1.0.0", prefix_format="/v{major}.{minor}", enable_latest=True)

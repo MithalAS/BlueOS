@@ -1,3 +1,4 @@
+import logging
 import struct
 import time
 from pathlib import Path
@@ -5,10 +6,36 @@ from typing import Any, List, Optional
 
 import requests
 import serial
+from pydantic import BaseModel
 
 USERDATA: Path = Path("/usr/blueos/userdata/")
 COMM_GET_APPCONF: int = 17
 COMM_SET_APPCONF: int = 16
+
+
+class AppConfigData(BaseModel):
+    """Data class for VESC AppConfig."""
+
+    controller_id: int
+    timeout_msec: int
+    timeout_brake_current: float
+    send_can_status_rate_1: int
+    can_status_rate_2: int
+    can_status_msgs_r1: int
+    can_status_msgs_r2: int
+    can_baud_rate: int
+    pairing_done: int
+    permanent_uart_enabled: int
+    shutdown_mode: int
+    can_mode: int
+    uavcan_esc_index: int
+    uavcan_raw_mode: int
+    uavcan_raw_rpm_max: float
+    uavcan_status_current_mode: int
+    servo_out_enable: int
+    kill_sw_mode: int
+    app_to_use: int
+    app_uart_baudrate: int
 
 
 class vescConfigEditor:
@@ -100,7 +127,52 @@ class vescConfigEditor:
                 print("No response received.")
             ser.close()
         except serial.SerialException as e:
-            print(f"Error: {e}")
+            logging.error(f"Serial error: {e}")
+        except ValueError as e:
+            logging.error(f"Value error: {e}")
+
+    def get_app_conf(self, port: str) -> Optional[AppConfigData]:
+        """Get the app configuration from the VESC."""
+        try:
+            ser: serial.Serial = serial.Serial(port, baudrate=115200, timeout=0.3)
+            response: Optional[bytearray] = self.get_appconf(ser)
+            if response:
+                payload: bytes = self.extract_payload_from_response(response)
+                if payload[0] == COMM_GET_APPCONF:
+                    payload = payload[1:]
+
+                payload = bytearray(payload)
+
+                if len(payload) < 278:
+                    raise ValueError(f"Expected at least 278 bytes, got {len(payload)}")
+
+                data = AppConfigData(
+                    controller_id=payload[4],
+                    timeout_msec=struct.unpack_from(">I", payload, 5)[0],
+                    timeout_brake_current=struct.unpack_from(">f", payload, 9)[0],
+                    send_can_status_rate_1=struct.unpack_from(">H", payload, 13)[0],
+                    can_status_rate_2=struct.unpack_from(">H", payload, 15)[0],
+                    can_status_msgs_r1=payload[17],
+                    can_status_msgs_r2=payload[18],
+                    can_baud_rate=payload[19],
+                    pairing_done=payload[20],
+                    permanent_uart_enabled=payload[21],
+                    shutdown_mode=payload[22],
+                    can_mode=payload[23],
+                    uavcan_esc_index=payload[24],
+                    uavcan_raw_mode=payload[25],
+                    uavcan_raw_rpm_max=struct.unpack_from(">f", payload, 26)[0],
+                    uavcan_status_current_mode=payload[30],
+                    servo_out_enable=payload[31],
+                    kill_sw_mode=payload[32],
+                    app_to_use=payload[33],
+                    app_uart_baudrate=struct.unpack_from(">I", payload, 139)[0],
+                )
+                return data
+
+        except serial.SerialException as e:
+            logging.error(f"Serial error: {e}")
+            return None
 
     def available_serial_ports(self) -> List[str]:
         try:
@@ -108,5 +180,5 @@ class vescConfigEditor:
             data: Any = response.json()
             return [port["name"] for port in data["ports"] if port["name"] is not None]
         except requests.RequestException as e:
-            print(f"Error fetching data: {e}")
+            logging.error(f"Error fetching serial ports: {e}")
             return []
