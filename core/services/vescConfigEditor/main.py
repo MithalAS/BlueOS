@@ -5,8 +5,8 @@ from typing import Any, List, Optional
 import uvicorn
 from commonwealth.utils.apis import GenericErrorHandlingRoute
 from commonwealth.utils.logs import InterceptHandler, init_logger
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from fastapi_versioning import VersionedFastAPI, version
 from loguru import logger
 
