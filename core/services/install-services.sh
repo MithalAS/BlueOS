@@ -30,6 +30,7 @@ SERVICES=(
     nmea_injector
     ping
     versionchooser
+    vescConfigEditor
     wifi
 )
 
