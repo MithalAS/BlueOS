@@ -6,6 +6,8 @@ from typing import Any, List, Optional
 
 import requests
 import serial
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 USERDATA: Path = Path("/usr/blueos/userdata/")
@@ -131,7 +133,7 @@ class vescConfigEditor:
         except ValueError as e:
             logging.error(f"Value error: {e}")
 
-    def get_app_conf(self, port: str) -> Optional[AppConfigData]:
+    def get_app_config(self, port: str) -> JSONResponse:
         """Get the app configuration from the VESC."""
         try:
             ser: serial.Serial = serial.Serial(port, baudrate=115200, timeout=0.3)
@@ -168,11 +170,13 @@ class vescConfigEditor:
                     app_to_use=payload[33],
                     app_uart_baudrate=struct.unpack_from(">I", payload, 139)[0],
                 )
-                return data
+                json_compatible_data = jsonable_encoder(data)
+                return JSONResponse(content=json_compatible_data)
 
         except serial.SerialException as e:
             logging.error(f"Serial error: {e}")
-            return None
+            return JSONResponse(content={"error": "Serial error"}, status_code=500)
+        return {"error": "No response received."}
 
     def available_serial_ports(self) -> List[str]:
         try:
