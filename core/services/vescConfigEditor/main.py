@@ -1,16 +1,16 @@
 #! /usr/bin/env python3
 import logging
-from typing import Any, List
+from typing import Any, List, Optional
 
 import uvicorn
 from commonwealth.utils.apis import GenericErrorHandlingRoute
 from commonwealth.utils.logs import InterceptHandler, init_logger
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, HTTPException
 from fastapi_versioning import VersionedFastAPI, version
 from loguru import logger
 
-from vescConfigEditor import vescConfigEditor
+from vescConfigEditor import AppConfigData, vescConfigEditor
 
 SERVICE_NAME = "vescConfigEditor"
 
@@ -44,11 +44,14 @@ async def change_timeout(serial_path: str, timeout_seconds: int) -> Any:
     logger.debug(f"Timeout changed to {timeout_seconds}.")
 
 
-@app.get("/getAppConfig", response_model=JSONResponse)
+@app.get("/getAppConfig", response_model=AppConfigData)
 @version(1, 0)
-async def get_app_config(serial_path: str) -> JSONResponse:
+async def get_app_config(serial_path: str) -> Optional[AppConfigData]:
     logger.debug(f"Getting app config from {serial_path}.")
     app_config = controller.get_app_config(serial_path)
+    if app_config is None:
+        logger.error("Failed to get app config.")
+        raise HTTPException(status_code=404, detail="No response received.")
     logger.debug(f"App config retrieved: {app_config}.")
     return app_config
 
