@@ -6,8 +6,18 @@ VERSION="${VERSION:-master}"
 GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-bluerobotics/BlueOS}
 REMOTE="${REMOTE:-https://raw.githubusercontent.com/${GITHUB_REPOSITORY}}"
 ROOT="$REMOTE/$VERSION"
-CMDLINE_FILE=/boot/cmdline.txt
-CONFIG_FILE=/boot/config.txt
+# check if kernel is bookworm or higher
+if grep -q 'VERSION_CODENAME=bookworm' /etc/os-release; then
+    echo "Running on Debian Bookworm"
+    CMDLINE_FILE=/boot/firmware/cmdline.txt
+    CONFIG_FILE=/boot/firmware/config.txt    
+else
+    echo "Not running on Debian Bookworm"
+    CMDLINE_FILE=/boot/cmdline.txt
+    CONFIG_FILE=/boot/config.txt
+fi
+
+
 alias curl="curl --retry 6 --max-time 15 --retry-all-errors --retry-delay 20 --connect-timeout 60"
 
 # Download, compile, and install spi0 mosi-only device tree overlay for
