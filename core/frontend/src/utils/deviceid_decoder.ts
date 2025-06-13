@@ -32,6 +32,7 @@ enum COMPASS_TYPE {
   MMC5883 = 0x13,
   AK09918 = 0x14,
   AK09915 = 0x15,
+  BMM350 = 0x17,
 }
 
 enum IMU_TYPE {
