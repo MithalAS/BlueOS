@@ -37,6 +37,35 @@ class Navigator(LinuxFlightController):
         raise NotImplementedError
 
 
+class NaviCube(LinuxFlightController):
+    manufacturer = "Remora Robotics"
+
+    def __init__(self, **data: Any) -> None:
+        name = "NaviCube"
+        plat = Platform.Navigator
+        if platform.machine() == "aarch64":
+            # edge case for 64-bit kernel on 32-bit userland...
+            # let's check the arch for /usr/bin/ls
+            with open("/usr/bin/ls", "rb") as f:
+                elf_file = ELFFile(f)
+                firm_arch = elf_file.get_machine_arch()
+                # from https://github.com/eliben/pyelftools/blob/main/elftools/elf/elffile.py#L513
+                if firm_arch == "AArch64":
+                    name = "NaviCube64"
+                    plat = Platform.Navigator64
+        super().__init__(**data, name=name, platform=plat)
+
+    def is_pi5(self) -> bool:
+        with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
+            return "Raspberry Pi 5" in f.read()
+
+    def detect(self) -> bool:
+        return False
+
+    def get_serials(self) -> List[Serial]:
+        return super().get_serials()
+
+
 class NavigatorPi5(Navigator):
     devices = {
         "ADS1115": (0x48, 1),
@@ -96,7 +125,7 @@ class NavigatorPi4(Navigator):
         return all(self.check_for_i2c_device(bus, address) for address, bus in self.devices.values())
 
 
-class NaviCube(Navigator):
+class NaviCubePi4(NaviCube):
     devices = {
         # "UART": (0x35, 6), #  this wont work, always busy by driver
         # "KellerLD": (0x40, 6),
