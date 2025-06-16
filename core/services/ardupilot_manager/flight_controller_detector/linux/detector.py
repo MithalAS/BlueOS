@@ -6,7 +6,7 @@ from loguru import logger
 from flight_controller_detector.linux.argonot import Argonot
 from flight_controller_detector.linux.linux_boards import LinuxFlightController
 from flight_controller_detector.linux.navigator import (
-    NaviCube,
+    NaviCubePi4,
     NavigatorPi4,
     NavigatorPi5,
 )
