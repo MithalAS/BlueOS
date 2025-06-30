@@ -258,6 +258,67 @@ if [ ! -e /etc/resolv.conf.host ]; then
     sudo ln /etc/resolv.conf /etc/resolv.conf.host
 fi
 
+echo "Architecture: $ARCHITECTURE"
+if [ "$ARCHITECTURE" = "armv7l" ] || [ "$ARCHITECTURE" = "armhf" ]; then
+    echo "Installing armv7l/armhf kernel"  # linux-image-6.6.74-remora+_6.6.74-gb9c846862b03-2_armhf.deb
+    COMPILE_VER="gb9c846862b03-2_armhf"
+    CONFIG_TXT_PATH="/boot/config.txt"
+    OVERLAY_PATH="/boot/overlays"
+elif [ "$ARCHITECTURE" = "aarch64" ]; then
+    echo "Installing aarch64 kernel"  # linux-image-6.6.74-remora+_6.6.74-gb9c846862b03-2_arm64.deb
+    COMPILE_VER="gb9c846862b03-2_arm64"
+    CONFIG_TXT_PATH="/boot/firmware/config.txt"
+    OVERLAY_PATH="/boot/firmware/overlays"
+else
+    echo "Unsupported architecture: $ARCHITECTURE for kernel installation, SKIPPING!"
+    SKIP_KERNEL_INSTALL=1
+fi
+
+# Group kernel version variables for clarity
+KERNEL_BASE_VERSION="6.6.74-remora+"
+KERNEL_VERSION="${KERNEL_BASE_VERSION}_6.6.74"
+
+if [ -z "$SKIP_KERNEL_INSTALL" ]; then
+    echo "Installing kernel version ${KERNEL_VERSION} with compile version ${COMPILE_VER}."
+    STATUS_FILE="$HOME/kernel_install_status.txt"
+    wget "https://github.com/MithalAS/BlueOS/raw/refs/heads/${VERSION}/linux-image-${KERNEL_VERSION}-${COMPILE_VER}.deb"
+
+    if sudo dpkg -i linux-image-${KERNEL_VERSION}-${COMPILE_VER}.deb; then
+        echo "Kernel package installed successfully." > "$STATUS_FILE"
+    else
+        echo "Kernel package installation failed." > "$STATUS_FILE"
+        exit 1
+    fi
+
+    echo "Copy overlays (dtbo)"
+    sudo cp /lib/linux-image-6.6.74-remora+/overlays/spi1-3cs.dtbo "$OVERLAY_PATH"/spi1-3cs.dtbo
+    sudo cp /lib/linux-image-6.6.74-remora+/overlays/xrm117x-i2c6.dtbo "$OVERLAY_PATH"/xrm117x-i2c6.dtbo
+
+    if [ "$ARCHITECTURE" = "aarch64" ]; then
+        echo "Copying 64bit kernel to firmware"
+        sudo cp /boot/vmlinuz-${KERNEL_BASE_VERSION} /boot/firmware/vmlinuz-${KERNEL_BASE_VERSION}
+    fi
+
+    echo "Updating kernel entry in $CONFIG_TXT_PATH"
+    KERNEL_LINE="kernel=vmlinuz-${KERNEL_BASE_VERSION}"
+
+    # If kernel= line exists, replace it. If not, append the correct one.
+    if grep -q "^kernel=" "$CONFIG_TXT_PATH"; then
+        sudo sed -i "s/^kernel=.*/$KERNEL_LINE/" "$CONFIG_TXT_PATH"
+    else
+        echo "$KERNEL_LINE" | sudo tee -a "$CONFIG_TXT_PATH" > /dev/null
+    fi
+
+    echo "Add additional config entries (arm_64 and dtoverlays)"
+    # The grep -qxF ... || echo ... | sudo tee -a ... ensures the line is present only once in the config file.
+    if [ "$ARCHITECTURE" = "aarch64" ]; then
+        LINE="arm_64=1"
+        grep -qxF "$LINE" "$CONFIG_TXT_PATH" || echo "$LINE" | sudo tee -a "$CONFIG_TXT_PATH"
+    fi
+    LINE="dtoverlay=xrm117x-i2c6"
+    grep -qxF "$LINE" "$CONFIG_TXT_PATH" || echo "$LINE" | sudo tee -a "$CONFIG_TXT_PATH"
+fi
+
 echo "Installation finished successfully."
 echo "You can access after the reboot:"
 echo "- The computer webpage: http://blueos-avahi.local"
