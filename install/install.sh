@@ -262,14 +262,24 @@ echo "disabling NetworkManager-wait-online.service"
 systemctl disable NetworkManager-wait-online.service || true
 
 echo "Architecture: $ARCHITECTURE"
+# Group kernel version variables for clarity
+KERNEL_BASE_VERSION="6.6.74-remora+"
+KERNEL_VERSION="${KERNEL_BASE_VERSION}_6.6.74"
+KERNEL_IMAGE_NAME="vmlinuz-${KERNEL_BASE_VERSION}"
+KERNEL_OVERLAY_SRC_DIR="/lib/linux-image-${KERNEL_BASE_VERSION}/overlays"
+KERNEL_COMPILE_BASE="gb9c846862b03-2"
+OVERLAY_SPI1="spi1-3cs.dtbo"
+OVERLAY_XRM="xrm117x-i2c6.dtbo"
+
+# Set architecture-specific variables
 if [ "$ARCHITECTURE" = "armv7l" ] || [ "$ARCHITECTURE" = "armhf" ]; then
     echo "Installing armv7l/armhf kernel"  # linux-image-6.6.74-remora+_6.6.74-gb9c846862b03-2_armhf.deb
-    COMPILE_VER="gb9c846862b03-2_armhf"
+    KERNEL_ARCH_SUFFIX="armhf"
     CONFIG_TXT_PATH="/boot/config.txt"
     OVERLAY_PATH="/boot/overlays"
 elif [ "$ARCHITECTURE" = "aarch64" ]; then
     echo "Installing aarch64 kernel"  # linux-image-6.6.74-remora+_6.6.74-gb9c846862b03-2_arm64.deb
-    COMPILE_VER="gb9c846862b03-2_arm64"
+    KERNEL_ARCH_SUFFIX="arm64"
     CONFIG_TXT_PATH="/boot/firmware/config.txt"
     OVERLAY_PATH="/boot/firmware/overlays"
 else
@@ -277,16 +287,14 @@ else
     SKIP_KERNEL_INSTALL=1
 fi
 
-# Group kernel version variables for clarity
-KERNEL_BASE_VERSION="6.6.74-remora+"
-KERNEL_VERSION="${KERNEL_BASE_VERSION}_6.6.74"
-
 if [ -z "$SKIP_KERNEL_INSTALL" ]; then
-    echo "Installing kernel version ${KERNEL_VERSION} with compile version ${COMPILE_VER}."
-    STATUS_FILE="$HOME/kernel_install_status.txt"
-    wget "https://github.com/MithalAS/BlueOS/raw/refs/heads/${VERSION}/linux-image-${KERNEL_VERSION}-${COMPILE_VER}.deb"
+    KERNEL_DEB_FILENAME="linux-image-${KERNEL_VERSION}-${KERNEL_COMPILE_BASE}_${KERNEL_ARCH_SUFFIX}.deb"
 
-    if sudo dpkg -i linux-image-${KERNEL_VERSION}-${COMPILE_VER}.deb; then
+    echo "Installing kernel version ${KERNEL_VERSION} with compile base ${KERNEL_COMPILE_BASE} and arch ${KERNEL_ARCH_SUFFIX}."
+    STATUS_FILE="$HOME/kernel_install_status.txt"
+    wget "https://github.com/MithalAS/BlueOS/raw/refs/heads/${VERSION}/${KERNEL_DEB_FILENAME}"
+
+    if sudo dpkg -i "${KERNEL_DEB_FILENAME}"; then
         echo "Kernel package installed successfully." > "$STATUS_FILE"
     else
         echo "Kernel package installation failed." > "$STATUS_FILE"
@@ -294,16 +302,16 @@ if [ -z "$SKIP_KERNEL_INSTALL" ]; then
     fi
 
     echo "Copy overlays (dtbo)"
-    sudo cp /lib/linux-image-6.6.74-remora+/overlays/spi1-3cs.dtbo "$OVERLAY_PATH"/spi1-3cs.dtbo
-    sudo cp /lib/linux-image-6.6.74-remora+/overlays/xrm117x-i2c6.dtbo "$OVERLAY_PATH"/xrm117x-i2c6.dtbo
+    sudo cp "${KERNEL_OVERLAY_SRC_DIR}/${OVERLAY_SPI1}" "$OVERLAY_PATH/${OVERLAY_SPI1}"
+    sudo cp "${KERNEL_OVERLAY_SRC_DIR}/${OVERLAY_XRM}" "$OVERLAY_PATH/${OVERLAY_XRM}"
 
     if [ "$ARCHITECTURE" = "aarch64" ]; then
         echo "Copying 64bit kernel to firmware"
-        sudo cp /boot/vmlinuz-${KERNEL_BASE_VERSION} /boot/firmware/vmlinuz-${KERNEL_BASE_VERSION}
+        sudo cp "/boot/${KERNEL_IMAGE_NAME}" "/boot/firmware/${KERNEL_IMAGE_NAME}"
     fi
 
     echo "Updating kernel entry in $CONFIG_TXT_PATH"
-    KERNEL_LINE="kernel=vmlinuz-${KERNEL_BASE_VERSION}"
+    KERNEL_LINE="kernel=${KERNEL_IMAGE_NAME}"
 
     # If kernel= line exists, replace it. If not, append the correct one.
     if grep -q "^kernel=" "$CONFIG_TXT_PATH"; then
