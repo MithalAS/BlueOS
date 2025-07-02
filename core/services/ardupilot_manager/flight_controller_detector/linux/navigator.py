@@ -126,12 +126,8 @@ class NavigatorPi4(Navigator):
 
 
 class NaviCubePi4(NaviCube):
-    devices = {
-        # "UART": (0x35, 6), #  this wont work, always busy by driver
-        # "KellerLD": (0x40, 6),
-        "LIS3MDL": (0x1C, 1),
-        # "MMC5983": (0x13, 1) # ???
-    }
+    devicesV100 = {"LIS3MDL": (0x1C, 1), "ADS1115": (0x48, 1), "EEPROM": (0x58, 0)}
+    devicesV110 = {"BMM350": (0x14, 1), "ADS1115": (0x48, 1), "EEPROM": (0x58, 0)}
 
     def get_serials(self) -> List[Serial]:
         release = "Bullseye"
@@ -153,7 +149,7 @@ class NaviCubePi4(NaviCube):
                 ]
             case "Bookworm":
                 return [
-                    Serial(port="C", endpoint="/dev/ttyS0"),
+                    Serial(port="C", endpoint="/dev/ttyAMA0"),
                     Serial(port="B", endpoint="/dev/ttyAMA3"),
                     Serial(port="E", endpoint="/dev/ttyAMA4"),
                     Serial(port="F", endpoint="/dev/ttyAMA5"),
@@ -163,4 +159,8 @@ class NaviCubePi4(NaviCube):
     def detect(self) -> bool:
         if self.is_pi5():
             return False
-        return all(self.check_for_i2c_device(bus, address) for address, bus in self.devices.values())
+        if all(self.check_for_i2c_device(bus, address) for address, bus in self.devicesV100.values()):
+            return True
+        if all(self.check_for_i2c_device(bus, address) for address, bus in self.devicesV110.values()):
+            return True
+        return False
