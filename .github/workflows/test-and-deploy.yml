@@ -326,7 +326,7 @@ jobs:
         uses: actions/upload-artifact@v4
         timeout-minutes: 120
         with:
-          name: BlueOS-raspberry-${{ env.GITHUB_REF_NAME }}${{ env.SANITIZED_PLATFORM }}-${{ matrix.os }}
+          name: BlueOS-raspberry-${{ env.GITHUB_REF_NAME }}${{ env.SANITIZED_PLATFORM }}-${{ matrix.os }}-${{ matrix.runner }}
           path: deploy/pimod/blueos.img
           if-no-files-found: error
           retention-days: 7
@@ -351,7 +351,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: BlueOS-raspberry-${{ env.SANITIZED_PLATFORM }}-${{ matrix.os }}.zip
-          asset_name: BlueOS-raspberry-${{ env.SANITIZED_PLATFORM }}-${{ matrix.os }}${{ env.ASSET_NAME_SUFFIX }}.zip
+          asset_name: BlueOS-raspberry-${{ env.SANITIZED_PLATFORM }}-${{ matrix.os }}${{ env.ASSET_NAME_SUFFIX }}-${{ matrix.runner }}.zip
           tag: ${{ github.ref }}
           overwrite: true
           prerelease: true
