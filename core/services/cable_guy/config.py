@@ -9,7 +9,7 @@ DEFAULT_NETWORK_INTERFACES = [
     NetworkInterface(
         name="eth0",
         addresses=[
-            InterfaceAddress(ip="192.168.2.2", mode=AddressMode.BackupServer),
+            InterfaceAddress(ip="192.168.2.2", mode=AddressMode.Unmanaged),
             InterfaceAddress(ip="0.0.0.0", mode=AddressMode.Client),
         ],
     ),
