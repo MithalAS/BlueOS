@@ -6,13 +6,16 @@ VERSION="${VERSION:-master}"
 GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-bluerobotics/BlueOS}
 REMOTE="${REMOTE:-https://raw.githubusercontent.com/${GITHUB_REPOSITORY}}"
 ROOT="$REMOTE/$VERSION"
+STATUS_FILE="$HOME/board_install_status.txt"
+# what is?
+echo "Version: $VERSION, Repo: $GITHUB_REPOSITORY" >> "$STATUS_FILE"
 # check if kernel is bookworm or higher
 if grep -q 'VERSION_CODENAME=bookworm' /etc/os-release; then
-    echo "Running on Debian Bookworm"
+    echo "Running on Debian Bookworm" >> "$STATUS_FILE"
     CMDLINE_FILE=/boot/firmware/cmdline.txt
     CONFIG_FILE=/boot/firmware/config.txt    
 else
-    echo "Not running on Debian Bookworm"
+    echo "Not running on Debian Bookworm" >> "$STATUS_FILE"
     CMDLINE_FILE=/boot/cmdline.txt
     CONFIG_FILE=/boot/config.txt
 fi
