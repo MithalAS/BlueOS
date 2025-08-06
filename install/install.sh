@@ -266,20 +266,21 @@ KERNEL_OVERLAY_SRC_DIR="/lib/linux-image-${KERNEL_BASE_VERSION}/overlays"
 KERNEL_COMPILE_BASE="g85f48972aed1-2"
 OVERLAY_SPI1="spi1-3cs.dtbo"
 OVERLAY_XRM="xrm117x-i2c6.dtbo"
+STATUS_FILE="$HOME/kernel_install_status.txt"
 
 # Set architecture-specific variables
 if [ "$ARCHITECTURE" = "armv7l" ] || [ "$ARCHITECTURE" = "armhf" ]; then
-    echo "Installing armv7l/armhf kernel"  # linux-image-6.6.74-remora+_6.6.74-gb9c846862b03-2_armhf.deb
+    echo "Installing armv7l/armhf kernel" >> "$STATUS_FILE" # linux-image-6.6.74-remora+_6.6.74-gb9c846862b03-2_armhf.deb
     KERNEL_ARCH_SUFFIX="armhf"
     CONFIG_TXT_PATH="/boot/config.txt"
     OVERLAY_PATH="/boot/overlays"
 elif [ "$ARCHITECTURE" = "aarch64" ]; then
-    echo "Installing aarch64 kernel"  # linux-image-6.6.74-remora+_6.6.74-gb9c846862b03-2_arm64.deb
+    echo "Installing aarch64 kernel" >> "$STATUS_FILE" # linux-image-6.6.74-remora+_6.6.74-gb9c846862b03-2_arm64.deb
     KERNEL_ARCH_SUFFIX="arm64"
     CONFIG_TXT_PATH="/boot/firmware/config.txt"
     OVERLAY_PATH="/boot/firmware/overlays"
 else
-    echo "Unsupported architecture: $ARCHITECTURE for kernel installation, SKIPPING!"
+    echo "Unsupported architecture: $ARCHITECTURE for kernel installation, SKIPPING!" >> "$STATUS_FILE"
     SKIP_KERNEL_INSTALL=1
 fi
 
@@ -287,33 +288,32 @@ if [ -z "$SKIP_KERNEL_INSTALL" ]; then
     KERNEL_DEB_FILENAME="linux-image-${KERNEL_VERSION}-${KERNEL_COMPILE_BASE}_${KERNEL_ARCH_SUFFIX}.deb"
 
     echo "Installing kernel version ${KERNEL_VERSION} with compile base ${KERNEL_COMPILE_BASE} and arch ${KERNEL_ARCH_SUFFIX}."
-    STATUS_FILE="$HOME/kernel_install_status.txt"
     wget "https://github.com/MithalAS/BlueOS/raw/refs/heads/${VERSION}/${KERNEL_DEB_FILENAME}"
 
     if sudo dpkg -i "${KERNEL_DEB_FILENAME}"; then
-        echo "Kernel package installed successfully." > "$STATUS_FILE"
+        echo "Kernel package installed successfully." >> "$STATUS_FILE"
     else
-        echo "Kernel package installation failed." > "$STATUS_FILE"
+        echo "Kernel package installation failed." >> "$STATUS_FILE"
         exit 1
     fi
 
-    echo "Copy overlays (dtbo)"
+    echo "Copy overlays (dtbo)" >> "$STATUS_FILE"
     sudo cp "${KERNEL_OVERLAY_SRC_DIR}/${OVERLAY_SPI1}" "$OVERLAY_PATH/${OVERLAY_SPI1}"
     sudo cp "${KERNEL_OVERLAY_SRC_DIR}/${OVERLAY_XRM}" "$OVERLAY_PATH/${OVERLAY_XRM}"
 
     if [ "$ARCHITECTURE" = "aarch64" ]; then
-        echo "Copying 64bit kernel to firmware"
+        echo "Copying 64bit kernel to firmware" >> "$STATUS_FILE"
         sudo cp "/boot/${KERNEL_IMAGE_NAME}" "/boot/firmware/${KERNEL_IMAGE_NAME}"
     fi
 
-    echo "Updating kernel entry in $CONFIG_TXT_PATH"
+    echo "Updating kernel entry in $CONFIG_TXT_PATH" >> "$STATUS_FILE"
     KERNEL_LINE="kernel=${KERNEL_IMAGE_NAME}"
 
     # If kernel= line exists, replace it. If not, append the correct one.
     if grep -q "^kernel=" "$CONFIG_TXT_PATH"; then
         sudo sed -i "s/^kernel=.*/$KERNEL_LINE/" "$CONFIG_TXT_PATH"
     else
-        echo "$KERNEL_LINE" | sudo tee -a "$CONFIG_TXT_PATH" > /dev/null
+        echo "$KERNEL_LINE" | sudo tee -a "$CONFIG_TXT_PATH" >> /dev/null
     fi
 
     echo "Add additional config entries (arm_64 and dtoverlays)"
