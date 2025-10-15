@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse
 from fastapi_versioning import VersionedFastAPI, version
 from loguru import logger
 
-from core.services.remoraCameraManager.remoraCameraManager import remoraCameraManager
+from remoraCameraManager import RemoraCameraManager
 
 SERVICE_NAME = "remoraCameraManager"
 
@@ -24,7 +24,7 @@ app = FastAPI(
 app.router.route_class = GenericErrorHandlingRoute
 logger.info("Starting remoraCameraManager!")
 
-manager = remoraCameraManager()
+manager = RemoraCameraManager()
 logger.info(" Editor initialized.")
 
 
@@ -46,20 +46,6 @@ def get_uhubctrl_printout() -> Any:
     except Exception as e:
         logger.error(f"Error getting uhubctl printout: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
-
-
-@app.get("/config", response_model=dict)
-def get_config() -> Any:
-    config = manager.config
-    logger.debug(f"Current config: {config}.")
-    return config
-
-
-@app.post("/config", response_model=dict)
-def update_config(new_config: dict) -> Any:
-    manager.set_config(new_config)
-    logger.debug(f"Config updated to: {new_config}.")
-    return manager.config
 
 
 @app.post("/powerCyclePort", response_model=dict)
@@ -167,6 +153,41 @@ def get_video_devices(
         return devices
     except Exception as e:
         logger.error(f"Error finding video devices: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
+
+
+@app.get("/config", response_model=Any)
+def get_config() -> Any:
+    try:
+        config = manager.get_config()
+        logger.debug(f"Configuration retrieved: {config}.")
+        return config
+    except Exception as e:
+        logger.error(f"Error retrieving configuration: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
+
+
+@app.post("/config", response_model=dict[str, Any])
+def update_config(new_config: dict[str, Any]) -> Any:
+    try:
+        manager.set_config(new_config)
+        updated_config = manager.get_config()
+        logger.debug(f"Configuration updated to: {updated_config}.")
+        return updated_config
+    except Exception as e:
+        logger.error(f"Error updating configuration: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
+
+
+@app.post("/config/default", response_model=dict)
+def reset_config_to_default() -> Any:
+    try:
+        manager.set_default_config()
+        default_config = manager.get_config()
+        logger.debug(f"Configuration reset to default: {default_config}.")
+        return default_config
+    except Exception as e:
+        logger.error(f"Error resetting configuration to default: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
 
 

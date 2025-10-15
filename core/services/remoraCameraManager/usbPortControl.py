@@ -1,12 +1,6 @@
-import subprocess
 import shlex
+import subprocess
 import time
-
-
-class UhubctlError(RuntimeError):
-    """Custom error type for uhubctl failures."""
-
-    pass
 
 
 class Uhubctl:
@@ -31,8 +25,10 @@ class Uhubctl:
                 check=check,
             )
             return res.stdout.strip()
+        except FileNotFoundError as e:
+            raise RuntimeError(f"Command not found: {cmd}. Is uhubctl installed and in your PATH?") from e
         except subprocess.CalledProcessError as e:
-            raise UhubctlError(f"Command failed ({cmd})\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}")
+            raise RuntimeError(f"Command failed ({cmd})\nstdout:\n{e.stdout}\nstderr:\n{e.stderr}") from e
 
     def list_hubs(self) -> str:
         """
@@ -54,7 +50,7 @@ class Uhubctl:
         cmd = f"{prefix}uhubctl -l {location} -p {port} -a {action}"
         return self._run(cmd)
 
-    def power_cycle(self, location: str, port: int, off_seconds: float = 2.0) -> dict:
+    def power_cycle(self, location: str, port: int, off_seconds: float = 2.0) -> dict[str, str]:
         """
         Power-cycle a port by turning it off, waiting, then on.
         """

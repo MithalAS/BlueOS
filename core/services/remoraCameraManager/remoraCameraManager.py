@@ -1,22 +1,31 @@
-import os
-import subprocess
-import usbPortControl
-import shutil
 import glob
+import json
+import os
 import re
+import shutil
 import stat
+import subprocess
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, cast
 
-CONFIG_PATH = Path(".cameraManager.json")
+from commonwealth.settings.manager import Manager
+from pykson import Pykson
 
-default_config = {
+import usbPortControl
+from settings import CameraConfig, SettingsV1
+
+SERVICE_NAME = "remoraCameraManager"
+
+USERDATA = Path("/usr/blueos/userdata/")
+
+pyk = Pykson()
+default_config: Dict[str, Any] = {
     "PORT": 8554,
     "IP": "0.0.0.0",
     "USE_HW_ENC": False,
     "USB_HUB": "1-1",
     "FRONT": {
-        "USB_HUB_PORT": 2,
+        "usb_hub_port": 2,
         "device": "/dev/video4",
         "resolution": "640x480",
         "fps": 25,
@@ -25,7 +34,7 @@ default_config = {
         "preset": "superfast",
     },
     "BACK": {
-        "USB_HUB_PORT": 1,
+        "usb_hub_port": 1,
         "device": "/dev/video0",
         "resolution": "640x480",
         "fps": 25,
@@ -39,28 +48,27 @@ default_config = {
 class RemoraCameraManager:
     """Manager for config changes on remora camera controllers."""
 
-    def __init__(self):
-        self.config = default_config
-        self.load_config()
+    def __init__(self) -> None:
+        self.settings_manager = Manager(SERVICE_NAME, SettingsV1, USERDATA / "settings" / SERVICE_NAME)
+        self.settings_manager.load()
+        if not self.settings_manager.settings.camera:
+            self.settings_manager.settings.camera = pyk.from_json(default_config, CameraConfig)
+            self.settings_manager.save()
+
         self.usbControl = usbPortControl.Uhubctl(use_sudo=False)
 
-    def load_config(self) -> None:
-        """Load the camera configuration."""
-        if not CONFIG_PATH.exists():
-            self.save_config()
-        else:
-            with open(CONFIG_PATH, "r") as f:
-                import json
+    def set_default_config(self) -> None:
+        """Set the camera configuration to default values."""
+        self.settings_manager.settings.camera = pyk.from_json(default_config, CameraConfig)
+        self.settings_manager.save()
 
-                self.config = json.load(f)
+    def get_config(self) -> Any:
+        """Return the current camera configuration."""
+        return json.loads(pyk.to_json(self.settings_manager.settings.camera))
 
-    def save_config(self) -> None:
-        """Save the camera configuration."""
-        with open(CONFIG_PATH, "w") as f:
-            import json
-
-            json.dump(self.config, f, indent=4)
-            print(f"[+] Config saved to: {CONFIG_PATH}")
+    def set_config(self, new_config: dict[str, Any]) -> None:
+        self.settings_manager.settings.camera = pyk.from_json(new_config, CameraConfig)
+        self.settings_manager.save()
 
     def available_video_ports(self) -> list[str]:
         """Return a list of available video ports."""
@@ -73,39 +81,32 @@ class RemoraCameraManager:
     def get_uhubctrl_printout(self) -> list[str]:
         """Return the output of the uhubctl command."""
         try:
-            result = subprocess.run(["uhubctl"], capture_output=True, text=True)
-            if result.returncode != 0:
-                raise Exception(f"uhubctl command failed with error: {result.stderr}")
+            result = subprocess.run(["uhubctl"], capture_output=True, text=True, check=True)
             return result.stdout.splitlines()
-        except FileNotFoundError:
-            raise Exception("uhubctl command not found. Please ensure it is installed and in your PATH.")
-        except Exception as e:
-            raise Exception(f"An error occurred while running uhubctl: {e}")
-
-    def set_config(self, new_config: dict) -> None:
-        """Set a new configuration and save it."""
-        self.config = new_config
-        self.save_config()
+        except FileNotFoundError as exc:
+            raise RuntimeError("uhubctl command not found. Please ensure it is installed and in your PATH.") from exc
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"uhubctl command failed with exit code {exc.returncode}: {exc.stderr}") from exc
 
     def power_cycle_camera(self, camera: str) -> None:
         """Power cycle the specified camera."""
-        if camera not in self.config:
+        if camera not in self.settings_manager.settings.camera:
             raise ValueError(f"Camera '{camera}' not found in configuration.")
 
-        cam_config = self.config[camera]
-        port = cam_config.get("USB_HUB_PORT")
-        location = self.config.get("USB_HUB")
+        cam_config = cast(dict[str, Any], self.settings_manager.settings.camera[camera])
+        port = cam_config.get("usb_hub_port")
+        location = self.settings_manager.settings.camera.get("USB_HUB")
         duration = 10  # seconds
 
         if port is None:
-            raise ValueError(f"USB_HUB_PORT not defined for camera '{camera}'.")
+            raise ValueError(f"usb_hub_port not defined for camera '{camera}'.")
 
-        self.usbControl.power_cycle(location, port, duration)
+        self.usbControl.power_cycle(str(location), port, duration)
 
     def start_mediamtx_server(self) -> None:
         """Start the media server process."""
         if shutil.which("docker"):
-            subprocess.Popen(
+            with subprocess.Popen(
                 [
                     "docker",
                     "run",
@@ -114,14 +115,17 @@ class RemoraCameraManager:
                     "--name",
                     "mediamtx",
                     "-p",
-                    f"{self.config['IP']}:{self.config['PORT']}:{self.config['PORT']}",
+                    f"{self.settings_manager.settings.camera['IP']}:{self.settings_manager.settings.camera['PORT']}:{self.settings_manager.settings.camera['PORT']}",
                     "-v",
                     "/home/pi/mediamtx.yml:/mediamtx.yml:ro",
                     "bluenet/mediamtx:latest",
                     "-f",
                     "/mediamtx.yml",
                 ]
-            )
+            ) as proc:
+                proc.wait()
+                if proc.returncode != 0:
+                    raise RuntimeError(f"Failed to start mediamtx server, exit code {proc.returncode}")
         else:
             raise EnvironmentError("Docker is not installed or not found in PATH.")
 
@@ -132,9 +136,17 @@ class RemoraCameraManager:
         else:
             raise EnvironmentError("Docker is not installed or not found in PATH.")
 
-    def ffmpeg_cmd(self, device, res, fps, name, kbitrate, use_hw=True, preset="ultrafast") -> list[str]:
+    def ffmpeg_cmd(self, cam_config: dict[str, Any], use_hw: bool) -> list[str]:
+        device = cam_config.get("device")
+        res = cam_config.get("resolution")
+        fps = cam_config.get("fps")
+        kbitrate = cam_config.get("kbitrate")
+        preset = cam_config.get("preset")
+
         input_format = "yuyv422"
         bitrate = f"{kbitrate}k"
+        if device is None or res is None or fps is None or kbitrate is None or preset is None:
+            raise ValueError("Camera configuration is incomplete.")
 
         cmd = [
             "ffmpeg",
@@ -203,25 +215,20 @@ class RemoraCameraManager:
 
     def start_stream(self, camera: str) -> None:
         """Start streaming for the specified camera."""
-        if camera not in self.config:
+        if camera not in self.settings_manager.settings.camera:
             raise ValueError(f"Camera '{camera}' not found in configuration.")
 
-        cam_config = self.config[camera]
+        cam_config = cast(dict[str, Any], self.settings_manager.settings.camera[camera])
         device = cam_config.get("device")
-        res = cam_config.get("resolution")
-        fps = cam_config.get("fps")
-        name = cam_config.get("name")
-        kbitrate = cam_config.get("kbitrate")
-        preset = cam_config.get("preset")
-        use_hw = self.config.get("USE_HW_ENC")
+        use_hw = self.settings_manager.settings.camera.get("USE_HW_ENC")
 
         if device is None:
             raise ValueError(f"Device not defined for camera '{camera}'.")
 
-        cmd = self.ffmpeg_cmd(device, res, fps, name, kbitrate, use_hw, preset)
+        cmd = self.ffmpeg_cmd(cam_config, bool(use_hw))
 
         # RTSP output
-        rtsp_url = f"rtsp://{self.config['IP']}:{self.config['PORT']}/{name}"
+        rtsp_url = f"rtsp://{self.settings_manager.settings.camera['IP']}:{self.settings_manager.settings.camera['PORT']}/{cam_config['name']}"
         cmd += [
             "-f",
             "rtsp",
@@ -235,15 +242,18 @@ class RemoraCameraManager:
         print(f"Starting stream for camera '{camera}' with command: {' '.join(cmd)}")
 
         # Start the ffmpeg process
-        subprocess.Popen(cmd)
-        print(f"[+] Stream started for camera '{camera}'.")
+        with subprocess.Popen(cmd) as proc:
+            proc.wait()
+            if proc.returncode != 0:
+                raise RuntimeError(f"ffmpeg exited with code {proc.returncode}")
+            print(f"[+] Stream started for camera '{camera}'.")
 
     def stop_stream(self, camera: str) -> None:
         """Stop streaming for the specified camera."""
-        if camera not in self.config:
+        if camera not in self.settings_manager.settings.camera:
             raise ValueError(f"Camera '{camera}' not found in configuration.")
 
-        cam_config = self.config[camera]
+        cam_config = cast(dict[str, Any], self.settings_manager.settings.camera[camera])
         name = cam_config.get("name")
 
         if name is None:
@@ -252,16 +262,25 @@ class RemoraCameraManager:
         # Find and kill the ffmpeg process streaming this camera
         try:
             result = subprocess.run(
-                ["pgrep", "-f", f"rtsp://{self.config['IP']}:{self.config['PORT']}/{name}"],
+                [
+                    "pgrep",
+                    "-f",
+                    f"rtsp://{self.settings_manager.settings.camera['IP']}:{self.settings_manager.settings.camera['PORT']}/{name}",
+                ],
                 capture_output=True,
                 text=True,
+                check=True,
             )
             pids = result.stdout.splitlines()
             for pid in pids:
                 subprocess.run(["kill", "-9", pid], check=False)
             print(f"[+] Stream stopped for camera '{camera}'.")
-        except Exception as e:
-            raise Exception(f"An error occurred while stopping the stream: {e}")
+        except FileNotFoundError as exc:
+            raise RuntimeError("pgrep command not found. Please ensure it is installed and in your PATH.") from exc
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"pgrep failed with exit code {exc.returncode}: {exc.stderr}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"An unexpected error occurred while stopping the stream: {exc}") from exc
 
     def is_chardev(self, p: str) -> bool:
         try:
@@ -287,12 +306,9 @@ class RemoraCameraManager:
         if include_alias and pixel_format.upper() == "YUYV":
             want.add("YUY2")
 
-        matches: List[str] = []
-
-        for dev in sorted(glob.glob(device_glob)):
+        def device_supports(dev: str) -> bool:
             if not self.is_chardev(dev):
-                continue
-
+                return False
             try:
                 out = subprocess.run(
                     ["v4l2-ctl", "-d", dev, "--list-formats-ext"],
@@ -302,29 +318,18 @@ class RemoraCameraManager:
                     text=True,
                 ).stdout
             except Exception:
-                continue
-
+                return False
             if not out:
-                continue
+                return False
 
-            lines = out.splitlines()
             current_code = None
-            in_wanted_block = False
-            found_size_in_block = False
-
-            for line in lines:
+            for line in out.splitlines():
                 m = pix_re_a.search(line) or pix_re_b.search(line)
                 if m:
                     current_code = m.group(1).upper()
-                    in_wanted_block = current_code in want
-                    found_size_in_block = False
                     continue
+                if current_code in want and size_re.search(line):
+                    return True
+            return False
 
-                if in_wanted_block:
-                    if size_re.search(line):
-                        found_size_in_block = True
-                    if found_size_in_block:
-                        matches.append(dev)
-                        break
-
-        return matches
+        return [dev for dev in sorted(glob.glob(device_glob)) if device_supports(dev)]
