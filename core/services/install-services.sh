@@ -31,6 +31,7 @@ SERVICES=(
     ping
     versionchooser
     vescConfigEditor
+    remoraCameraManager
     wifi
 )
 
