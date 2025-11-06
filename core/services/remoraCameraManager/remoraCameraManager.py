@@ -1,5 +1,6 @@
 import glob
 import json
+import logging
 import os
 import re
 import shutil
@@ -77,6 +78,47 @@ class RemoraCameraManager:
             if device.startswith("video"):
                 video_ports.append(os.path.join("/dev", device))
         return video_ports
+
+    def update_usb_permissions(self) -> bool:
+        rule_path = Path("/etc/udev/rules.d/52-usb.rules")
+        desired_rules = [
+            # Consider using the official uhubctl recommendations, or adjust matching here.
+            'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="32e4"',
+            'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="2109"',
+            'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="1d6b"',
+        ]
+
+        logging.info("Updating USB permissions at %s", str(rule_path))
+        changed = False
+
+        try:
+            rule_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if not rule_path.exists():
+                logging.info("Rules file does not exist, creating it.")
+                rule_path.write_text("\n".join(desired_rules) + "\n", encoding="utf-8")
+                changed = True
+            else:
+                existing = rule_path.read_text(encoding="utf-8").splitlines()
+                with rule_path.open("a", encoding="utf-8") as f:
+                    for line in desired_rules:
+                        if line not in existing:
+                            logging.info("Appending missing rule: %s", line)
+                            f.write(line + "\n")
+                            changed = True
+
+            if changed:
+                self.usbControl._run("sudo udevadm control --reload-rules", False)
+                self.usbControl._run("sudo udevadm trigger --subsystem-match=usb", False)
+                logging.info("udev rules reloaded and triggered.")
+            else:
+                logging.info("No changes needed; rules already present.")
+
+            return changed
+
+        except Exception as e:
+            logging.exception("Failed to update USB permissions: %s", e)
+            return False
 
     def get_uhubctrl_printout(self) -> list[str]:
         """Return the output of the uhubctl command."""
