@@ -63,8 +63,7 @@ def power_cycle_port(port: int, location: str = "1-1", duration: int = 2) -> Any
 @app.post("/powerCycleCamera", response_model=dict)
 def power_cycle_camera(camera: str) -> Any:
     try:
-        manager.power_cycle_camera(camera)
-        message = f"Camera '{camera}' power cycled."
+        message = manager.power_cycle_camera(camera)
         logger.debug(message)
         return {"message": message}
     except ValueError as ve:

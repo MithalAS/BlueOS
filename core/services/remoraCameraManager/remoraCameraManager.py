@@ -130,20 +130,20 @@ class RemoraCameraManager:
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(f"uhubctl command failed with exit code {exc.returncode}: {exc.stderr}") from exc
 
-    def power_cycle_camera(self, camera: str) -> None:
+    def power_cycle_camera(self, cam: str) -> str:
         """Power cycle the specified camera."""
-        if camera not in self.settings_manager.settings.camera:
-            raise ValueError(f"Camera '{camera}' not found in configuration.")
-
-        cam_config = cast(dict[str, Any], self.settings_manager.settings.camera[camera])
-        port = cam_config.get("usb_hub_port")
-        location = self.settings_manager.settings.camera.get("USB_HUB")
-        duration = 10  # seconds
+        if cam == "front":
+            port = self.settings_manager.settings.camera.FRONT.usb_hub_port
+        elif cam == "back":
+            port = self.settings_manager.settings.camera.BACK.usb_hub_port
+        else:
+            raise ValueError(f"Unknown camera '{cam}'. Valid options are 'front' or 'back'.")
 
         if port is None:
-            raise ValueError(f"usb_hub_port not defined for camera '{camera}'.")
-
-        self.usbControl.power_cycle(str(location), port, duration)
+            raise ValueError(f"usb_hub_port not defined for camera '{cam}'.")
+        location = self.settings_manager.settings.camera.USB_HUB
+        self.usbControl.power_cycle(location=location, port=port, off_seconds=10.0)  # power cycle for 10 seconds
+        return f"Camera '{cam}' power cycled on hub {location} port {port} for 10 seconds."
 
     def start_mediamtx_server(self) -> None:
         """Start the media server process."""
@@ -257,10 +257,13 @@ class RemoraCameraManager:
 
     def start_stream(self, camera: str) -> None:
         """Start streaming for the specified camera."""
-        if camera not in self.settings_manager.settings.camera:
+        if camera == "front":
+            cam_config = cast(dict[str, Any], self.settings_manager.settings.camera.FRONT)
+        elif camera == "back":
+            cam_config = cast(dict[str, Any], self.settings_manager.settings.camera.BACK)
+        else:
             raise ValueError(f"Camera '{camera}' not found in configuration.")
 
-        cam_config = cast(dict[str, Any], self.settings_manager.settings.camera[camera])
         device = cam_config.get("device")
         use_hw = self.settings_manager.settings.camera.get("USE_HW_ENC")
 
@@ -323,6 +326,30 @@ class RemoraCameraManager:
             raise RuntimeError(f"pgrep failed with exit code {exc.returncode}: {exc.stderr}") from exc
         except Exception as exc:
             raise RuntimeError(f"An unexpected error occurred while stopping the stream: {exc}") from exc
+
+    def kill_all_streams(self) -> None:
+        """Kill all ffmpeg streaming processes."""
+        try:
+            result = subprocess.run(
+                [
+                    "pgrep",
+                    "-f",
+                    "ffmpeg",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            pids = result.stdout.splitlines()
+            for pid in pids:
+                subprocess.run(["kill", "-9", pid], check=False)
+            print("All ffmpeg streams stopped.")
+        except FileNotFoundError as exc:
+            raise RuntimeError("pgrep command not found. Please ensure it is installed and in your PATH.") from exc
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"pgrep failed with exit code {exc.returncode}: {exc.stderr}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"An unexpected error occurred while stopping all streams: {exc}") from exc
 
     def is_chardev(self, p: str) -> bool:
         try:
