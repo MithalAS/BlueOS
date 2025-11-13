@@ -136,5 +136,11 @@ set -e
 
 EOF
 
+# Host video group is usually GID 44, but make it configurable
+ARG VIDEO_GID=44
+# Create or remap the 'video' group to the host GID, then add user blueos
+RUN (getent group video >/dev/null && groupmod -g ${VIDEO_GID} video) || groupadd -g ${VIDEO_GID} video && \
+    usermod -aG video blueos
+
 # Start
 CMD ["/bin/bash", "-i", "-c", "/usr/bin/start-blueos-core && sleep infinity"]
