@@ -3,11 +3,14 @@ import json
 import logging
 import os
 import re
+import select
 import shutil
 import stat
 import subprocess
+import textwrap
 from pathlib import Path
-from typing import Any, Dict, cast
+from time import sleep, time
+from typing import Any, Dict
 
 from commonwealth.settings.manager import Manager
 from pykson import Pykson
@@ -22,7 +25,7 @@ USERDATA = Path("/usr/blueos/userdata/")
 pyk = Pykson()
 default_config: Dict[str, Any] = {
     "PORT": 8554,
-    "IP": "0.0.0.0",
+    "IP": "127.0.0.1",
     "USE_HW_ENC": False,
     "USB_HUB": "1-1",
     "FRONT": {
@@ -57,6 +60,35 @@ class RemoraCameraManager:
             self.settings_manager.save()
 
         self.usbControl = usbPortControl.Uhubctl(use_sudo=False)
+
+    def _config_path(self) -> Path:
+        home = Path(os.environ.get("HOME", "/home/blueos"))
+        return home / ".config" / "mediamtx" / "mediamtx.yml"
+
+    def _ensure_config(self) -> Path:
+        cfg = self._config_path()
+        cfg.parent.mkdir(parents=True, exist_ok=True)
+
+        port = int(self.settings_manager.settings.camera.PORT)
+        default_cfg = textwrap.dedent(
+            f"""\
+            # Auto-generated MediaMTX configuration
+            logLevel: info
+            rtsp: yes
+            rtspAddress: :{port}
+            rtmp: no
+            hls: no
+            paths:
+                all:
+                    overridePublisher: yes
+        """
+        )
+
+        # always overwrite for now
+        cfg.write_text(default_cfg, encoding="utf-8")
+        os.chmod(cfg, 0o644)
+
+        return cfg
 
     def set_default_config(self) -> None:
         """Set the camera configuration to default values."""
@@ -130,6 +162,21 @@ class RemoraCameraManager:
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(f"uhubctl command failed with exit code {exc.returncode}: {exc.stderr}") from exc
 
+    def list_video_port_formats(self, port: str) -> list[str]:
+        """List supported formats for a given video port using v4l2-ctl."""
+        try:
+            result = subprocess.run(
+                ["v4l2-ctl", "-d", port, "--list-formats-ext"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            return result.stdout.splitlines()
+        except FileNotFoundError as exc:
+            raise RuntimeError("v4l2-ctl command not found. Please ensure it is installed and in your PATH.") from exc
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"v4l2-ctl command failed with exit code {exc.returncode}: {exc.stderr}") from exc
+
     def power_cycle_camera(self, cam: str) -> str:
         """Power cycle the specified camera."""
         if cam == "front":
@@ -145,46 +192,92 @@ class RemoraCameraManager:
         self.usbControl.power_cycle(location=location, port=port, off_seconds=10.0)  # power cycle for 10 seconds
         return f"Camera '{cam}' power cycled on hub {location} port {port} for 10 seconds."
 
-    def start_mediamtx_server(self) -> None:
-        """Start the media server process."""
-        if shutil.which("docker"):
-            with subprocess.Popen(
-                [
-                    "docker",
-                    "run",
-                    "-d",
-                    "--rm",
-                    "--name",
-                    "mediamtx",
-                    "-p",
-                    f"{self.settings_manager.settings.camera['IP']}:{self.settings_manager.settings.camera['PORT']}:{self.settings_manager.settings.camera['PORT']}",
-                    "-v",
-                    "/home/pi/mediamtx.yml:/mediamtx.yml:ro",
-                    "bluenet/mediamtx:latest",
-                    "-f",
-                    "/mediamtx.yml",
-                ]
-            ) as proc:
-                proc.wait()
-                if proc.returncode != 0:
-                    raise RuntimeError(f"Failed to start mediamtx server, exit code {proc.returncode}")
-        else:
-            raise EnvironmentError("Docker is not installed or not found in PATH.")
+    def start_mediamtx_server(self) -> str:
+        mediamtx = shutil.which("mediamtx")
+        if not mediamtx:
+            raise EnvironmentError("MediaMTX binary not found in PATH.")
 
-    def stop_media_server(self) -> None:
-        """Stop the media server process."""
-        if shutil.which("docker"):
-            subprocess.run(["docker", "stop", "mediamtx"], check=False)
-        else:
-            raise EnvironmentError("Docker is not installed or not found in PATH.")
+        cfg = self._ensure_config()
 
-    def ffmpeg_cmd(self, cam_config: dict[str, Any], use_hw: bool) -> list[str]:
-        device = cam_config.get("device")
-        res = cam_config.get("resolution")
-        fps = cam_config.get("fps")
-        kbitrate = cam_config.get("kbitrate")
-        preset = cam_config.get("preset")
+        try:
+            # pylint: disable=consider-using-with
+            proc = subprocess.Popen(
+                [mediamtx, str(cfg)],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                start_new_session=True,
+                text=True,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to start MediaMTX server: {e}") from e
 
+        # read a few lines without blocking
+        lines: list[str] = []
+        deadline = time() + 2.0  # ~2s window
+        max_lines = 5
+        while time() < deadline and len(lines) < max_lines:
+            if proc.poll() is not None:  # crashed
+                remaining = proc.stdout.read() if proc.stdout else ""
+                if remaining:
+                    lines.extend(remaining.splitlines())
+                raise RuntimeError("MediaMTX exited during startup:\n" + "\n".join(lines))
+            if proc.stdout:
+                r, _, _ = select.select([proc.stdout], [], [], 0.2)
+                if r:
+                    line = proc.stdout.readline()
+                    if not line:
+                        break
+                    lines.append(line.rstrip())
+        # return something useful even if it was quiet
+        if not lines:
+            return f"MediaMTX started (PID {proc.pid}) using {cfg}"
+        return "\n".join(lines[-12:])  # last few startup lines
+
+    def stop_mediamtx_server(self) -> str:
+        """
+        Stop the MediaMTX server if it's running.
+        Returns a message indicating the result.
+        """
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", "mediamtx"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            pids = result.stdout.splitlines()
+            if not pids:
+                return "MediaMTX server is not running."
+            for pid in pids:
+                subprocess.run(["kill", "-9", pid], check=False)
+            return "MediaMTX server stopped."
+        except FileNotFoundError as exc:
+            raise RuntimeError("pgrep command not found. Please ensure it is installed and in your PATH.") from exc
+
+    def check_mediamtx_running(self) -> bool:
+        """Check if the MediaMTX server is currently running."""
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", "mediamtx"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            pids = result.stdout.splitlines()
+            return len(pids) > 0
+        except FileNotFoundError as exc:
+            raise RuntimeError("pgrep command not found. Please ensure it is installed and in your PATH.") from exc
+        except subprocess.CalledProcessError:
+            return False
+
+    def ffmpeg_cmd(self, cam_config: Any, use_hw: bool) -> list[str]:
+        device = cam_config.device
+        res = cam_config.resolution
+        fps = cam_config.fps
+        kbitrate = cam_config.kbitrate
+        preset = cam_config.preset
         input_format = "yuyv422"
         bitrate = f"{kbitrate}k"
         if device is None or res is None or fps is None or kbitrate is None or preset is None:
@@ -255,25 +348,28 @@ class RemoraCameraManager:
             ]
         return cmd
 
-    def start_stream(self, camera: str) -> None:
+    def start_stream(self, camera: str) -> str:
         """Start streaming for the specified camera."""
         if camera == "front":
-            cam_config = cast(dict[str, Any], self.settings_manager.settings.camera.FRONT)
+            cam_config = self.settings_manager.settings.camera.FRONT
         elif camera == "back":
-            cam_config = cast(dict[str, Any], self.settings_manager.settings.camera.BACK)
+            cam_config = self.settings_manager.settings.camera.BACK
         else:
             raise ValueError(f"Camera '{camera}' not found in configuration.")
 
-        device = cam_config.get("device")
-        use_hw = self.settings_manager.settings.camera.get("USE_HW_ENC")
+        device = cam_config.device
+        use_hw = self.settings_manager.settings.camera.USE_HW_ENC
 
         if device is None:
             raise ValueError(f"Device not defined for camera '{camera}'.")
 
         cmd = self.ffmpeg_cmd(cam_config, bool(use_hw))
 
+        if self.check_mediamtx_running() is False:
+            print("MediaMTX server is not running. Might cause streaming issues.")
+
         # RTSP output
-        rtsp_url = f"rtsp://{self.settings_manager.settings.camera['IP']}:{self.settings_manager.settings.camera['PORT']}/{cam_config['name']}"
+        rtsp_url = f"rtsp://{self.settings_manager.settings.camera.IP}:{self.settings_manager.settings.camera.PORT}/{cam_config.name}"
         cmd += [
             "-f",
             "rtsp",
@@ -287,19 +383,25 @@ class RemoraCameraManager:
         print(f"Starting stream for camera '{camera}' with command: {' '.join(cmd)}")
 
         # Start the ffmpeg process
-        with subprocess.Popen(cmd) as proc:
-            proc.wait()
-            if proc.returncode != 0:
-                raise RuntimeError(f"ffmpeg exited with code {proc.returncode}")
-            print(f"[+] Stream started for camera '{camera}'.")
+        # pylint: disable=consider-using-with
+        proc = subprocess.Popen(cmd)
+        sleep(1.0)  # give it a moment to start
+
+        if proc.poll() is not None:
+            raise RuntimeError(f"ffmpeg process for camera '{camera}' exited prematurely.")
+
+        return f"Stream started successfully for camera '{camera}' with PID {proc.pid}."
 
     def stop_stream(self, camera: str) -> None:
         """Stop streaming for the specified camera."""
-        if camera not in self.settings_manager.settings.camera:
+        if camera == "front":
+            cam_config = self.settings_manager.settings.camera.FRONT
+        elif camera == "back":
+            cam_config = self.settings_manager.settings.camera.BACK
+        else:
             raise ValueError(f"Camera '{camera}' not found in configuration.")
 
-        cam_config = cast(dict[str, Any], self.settings_manager.settings.camera[camera])
-        name = cam_config.get("name")
+        name = cam_config.name
 
         if name is None:
             raise ValueError(f"Name not defined for camera '{camera}'.")
@@ -310,7 +412,7 @@ class RemoraCameraManager:
                 [
                     "pgrep",
                     "-f",
-                    f"rtsp://{self.settings_manager.settings.camera['IP']}:{self.settings_manager.settings.camera['PORT']}/{name}",
+                    f"rtsp://{self.settings_manager.settings.camera.IP}:{self.settings_manager.settings.camera.PORT}/{name}",
                 ],
                 capture_output=True,
                 text=True,

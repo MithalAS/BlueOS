@@ -36,6 +36,18 @@ def get_video_ports() -> Any:
     return ports
 
 
+@app.get("/video_port_formats", response_model=List[str])
+@version(1, 0)
+def get_video_port_formats(port: str = "/dev/video0") -> Any:
+    try:
+        formats = manager.list_video_port_formats(port)
+        logger.debug(f"Formats for video port {port}: {formats}.")
+        return formats
+    except Exception as e:
+        logger.error(f"Error getting formats for video port {port}: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
+
+
 @app.get("/uhubctrl_printout", response_model=List[str])
 @version(1, 0)
 def get_uhubctrl_printout() -> Any:
@@ -74,40 +86,25 @@ def power_cycle_camera(camera: str) -> Any:
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
 
 
-@app.post("/startMediaServer", response_model=dict)
-def start_media_server() -> Any:
+@app.post("/startMediamtxServer", response_model=dict)
+def start_mediamtx_server() -> Any:
     try:
-        manager.start_mediamtx_server()
-        message = "Media server started."
+        message = manager.start_mediamtx_server()
         logger.debug(message)
         return {"message": message}
     except Exception as e:
-        logger.error(f"Error starting media server: {e}")
+        logger.error(f"Error starting MediaMTX server: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
 
 
-@app.post("/stopMediaServer", response_model=dict)
-def stop_media_server() -> Any:
+@app.post("/stopMediamtxServer", response_model=dict)
+def stop_mediamtx_server() -> Any:
     try:
-        manager.stop_media_server()
-        message = "Media server stopped."
+        message = manager.stop_mediamtx_server()
         logger.debug(message)
         return {"message": message}
     except Exception as e:
         logger.error(f"Error stopping media server: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
-
-
-@app.post("/restartMediaServer", response_model=dict)
-def restart_media_server() -> Any:
-    try:
-        manager.stop_media_server()
-        manager.start_mediamtx_server()
-        message = "Media server restarted."
-        logger.debug(message)
-        return {"message": message}
-    except Exception as e:
-        logger.error(f"Error restarting media server: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
 
 
