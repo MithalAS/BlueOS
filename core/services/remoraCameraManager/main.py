@@ -126,8 +126,7 @@ def start_stream(camera: str) -> Any:
 @app.post("/stopStream", response_model=dict)
 def stop_stream(camera: str) -> Any:
     try:
-        manager.stop_stream(camera)
-        message = f"Stream for camera '{camera}' stopped."
+        message = manager.stop_stream(camera)
         logger.debug(message)
         return {"message": message}
     except ValueError as ve:

@@ -349,12 +349,14 @@ class RemoraCameraManager:
 
         return f"Stream started successfully for camera '{camera}' with PID {proc.pid}."
 
-    def stop_stream(self, camera: str) -> None:
+    def stop_stream(self, camera: str) -> str:
         """Stop streaming for the specified camera."""
         if camera == "front":
             cam_config = self.settings_manager.settings.camera.FRONT
         elif camera == "back":
             cam_config = self.settings_manager.settings.camera.BACK
+        elif camera == "all":
+            return self.kill_all_streams()
         else:
             raise ValueError(f"Camera '{camera}' not found in configuration.")
 
@@ -378,7 +380,7 @@ class RemoraCameraManager:
             pids = result.stdout.splitlines()
             for pid in pids:
                 subprocess.run(["kill", "-9", pid], check=False)
-            print(f"[+] Stream stopped for camera '{camera}'.")
+            return f"[+] Stream stopped for camera '{camera}'."
         except FileNotFoundError as exc:
             raise RuntimeError("pgrep command not found. Please ensure it is installed and in your PATH.") from exc
         except subprocess.CalledProcessError as exc:
@@ -386,29 +388,28 @@ class RemoraCameraManager:
         except Exception as exc:
             raise RuntimeError(f"An unexpected error occurred while stopping the stream: {exc}") from exc
 
-    def kill_all_streams(self) -> None:
+    def kill_all_streams(self) -> str:
         """Kill all ffmpeg streaming processes."""
-        try:
-            result = subprocess.run(
-                [
-                    "pgrep",
-                    "-f",
-                    "ffmpeg",
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            pids = result.stdout.splitlines()
-            for pid in pids:
+        result = subprocess.run(
+            ["pgrep", "-f", "ffmpeg"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 1 or not result.stdout.strip():
+            return "No ffmpeg streams found"
+        if result.returncode != 0:
+            raise RuntimeError(f"pgrep failed with exit code {result.returncode}: {result.stderr}")
+
+        pids = [p for p in result.stdout.split() if p.isdigit()]
+        killed_pids = []
+        for pid in pids:
+            try:
                 subprocess.run(["kill", "-9", pid], check=False)
-            print("All ffmpeg streams stopped.")
-        except FileNotFoundError as exc:
-            raise RuntimeError("pgrep command not found. Please ensure it is installed and in your PATH.") from exc
-        except subprocess.CalledProcessError as exc:
-            raise RuntimeError(f"pgrep failed with exit code {exc.returncode}: {exc.stderr}") from exc
-        except Exception as exc:
-            raise RuntimeError(f"An unexpected error occurred while stopping all streams: {exc}") from exc
+            except Exception as exc:
+                raise RuntimeError(f"An unexpected error occurred while stopping the stream: {exc}") from exc
+            killed_pids.append(pid)
+        return "Killed PIDs:\n" + "\n".join(str(pid) for pid in killed_pids)
 
     def is_chardev(self, p: str) -> bool:
         """Check if the given path is a character device."""
@@ -462,11 +463,15 @@ class RemoraCameraManager:
 
         return [dev for dev in sorted(glob.glob(device_glob)) if self.device_supports(dev, size, want)]
 
-    def find_video_devices_specific_encoding(self, encoding: str = "H264") -> list[str]:
+    def find_video_devices_specific_encoding(self, encoding: str = "H264", include_alias: bool = False) -> list[str]:
         """Find all video devices that support the specified pixel format."""
         want = {encoding.upper()}
+        if include_alias and encoding.upper() == "YUYV":
+            want.add("YUY2")
 
         devices = []
+        pix_re_a = re.compile(r"Pixel\s*Format\s*:\s*'([A-Z0-9]{4})'", re.I)
+        pix_re_b = re.compile(r"^\s*\[\d+\]\s*:\s*'([A-Z0-9]{4})'", re.I | re.M)
         for dev in sorted(glob.glob("/dev/video*")):
             if not self.is_chardev(dev):
                 continue
@@ -483,7 +488,7 @@ class RemoraCameraManager:
             if not out:
                 continue
             for line in out.splitlines():
-                m = re.search(r"Pixel\s*Format\s*:\s*'([A-Z0-9]{4})'", line, re.I)
+                m = pix_re_a.search(line) or pix_re_b.search(line)
                 if m and m.group(1).upper() in want:
                     devices.append(dev)
                     break
