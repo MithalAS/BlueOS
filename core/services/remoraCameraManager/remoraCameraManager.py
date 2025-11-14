@@ -1,6 +1,5 @@
 import glob
 import json
-import logging
 import os
 import re
 import select
@@ -61,12 +60,9 @@ class RemoraCameraManager:
 
         self.usbControl = usbPortControl.Uhubctl(use_sudo=False)
 
-    def _config_path(self) -> Path:
-        home = Path(os.environ.get("HOME", "/home/blueos"))
-        return home / ".config" / "mediamtx" / "mediamtx.yml"
-
     def _ensure_config(self) -> Path:
-        cfg = self._config_path()
+        """Makes sure mediaMTX config is default setup. Returns path to config file."""
+        cfg = Path(os.environ.get("HOME", "/home/blueos")) / ".config" / "mediamtx" / "mediamtx.yml"
         cfg.parent.mkdir(parents=True, exist_ok=True)
 
         port = int(self.settings_manager.settings.camera.PORT)
@@ -90,17 +86,17 @@ class RemoraCameraManager:
 
         return cfg
 
-    def set_default_config(self) -> None:
-        """Set the camera configuration to default values."""
-        self.settings_manager.settings.camera = pyk.from_json(default_config, CameraConfig)
-        self.settings_manager.save()
-
     def get_config(self) -> Any:
         """Return the current camera configuration."""
         return json.loads(pyk.to_json(self.settings_manager.settings.camera))
 
     def set_config(self, new_config: dict[str, Any]) -> None:
         self.settings_manager.settings.camera = pyk.from_json(new_config, CameraConfig)
+        self.settings_manager.save()
+
+    def set_default_config(self) -> None:
+        """Set the camera configuration to default values."""
+        self.settings_manager.settings.camera = pyk.from_json(default_config, CameraConfig)
         self.settings_manager.save()
 
     def available_video_ports(self) -> list[str]:
@@ -110,47 +106,6 @@ class RemoraCameraManager:
             if device.startswith("video"):
                 video_ports.append(os.path.join("/dev", device))
         return video_ports
-
-    def update_usb_permissions(self) -> bool:
-        rule_path = Path("/etc/udev/rules.d/52-usb.rules")
-        desired_rules = [
-            # Consider using the official uhubctl recommendations, or adjust matching here.
-            'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="32e4"',
-            'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="2109"',
-            'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="1d6b"',
-        ]
-
-        logging.info("Updating USB permissions at %s", str(rule_path))
-        changed = False
-
-        try:
-            rule_path.parent.mkdir(parents=True, exist_ok=True)
-
-            if not rule_path.exists():
-                logging.info("Rules file does not exist, creating it.")
-                rule_path.write_text("\n".join(desired_rules) + "\n", encoding="utf-8")
-                changed = True
-            else:
-                existing = rule_path.read_text(encoding="utf-8").splitlines()
-                with rule_path.open("a", encoding="utf-8") as f:
-                    for line in desired_rules:
-                        if line not in existing:
-                            logging.info("Appending missing rule: %s", line)
-                            f.write(line + "\n")
-                            changed = True
-
-            if changed:
-                self.usbControl._run("sudo udevadm control --reload-rules", False)
-                self.usbControl._run("sudo udevadm trigger --subsystem-match=usb", False)
-                logging.info("udev rules reloaded and triggered.")
-            else:
-                logging.info("No changes needed; rules already present.")
-
-            return changed
-
-        except Exception as e:
-            logging.exception("Failed to update USB permissions: %s", e)
-            return False
 
     def get_uhubctrl_printout(self) -> list[str]:
         """Return the output of the uhubctl command."""
@@ -193,6 +148,7 @@ class RemoraCameraManager:
         return f"Camera '{cam}' power cycled on hub {location} port {port} for 10 seconds."
 
     def start_mediamtx_server(self) -> str:
+        """Start the MediaMTX server."""
         mediamtx = shutil.which("mediamtx")
         if not mediamtx:
             raise EnvironmentError("MediaMTX binary not found in PATH.")
@@ -273,6 +229,7 @@ class RemoraCameraManager:
             return False
 
     def ffmpeg_cmd(self, cam_config: Any, use_hw: bool) -> list[str]:
+        """Generate ffmpeg command for the given camera configuration."""
         device = cam_config.device
         res = cam_config.resolution
         fps = cam_config.fps
@@ -454,13 +411,43 @@ class RemoraCameraManager:
             raise RuntimeError(f"An unexpected error occurred while stopping all streams: {exc}") from exc
 
     def is_chardev(self, p: str) -> bool:
+        """Check if the given path is a character device."""
         try:
             st = os.stat(p)
             return stat.S_ISCHR(st.st_mode)
         except FileNotFoundError:
             return False
 
-    def find_video_devices(
+    def device_supports(self, dev: str, size: str, want: set[str]) -> bool:
+        """Check if the given device supports the specified pixel formats and size."""
+        if not self.is_chardev(dev):
+            return False
+        pix_re_a = re.compile(r"Pixel\s*Format\s*:\s*'([A-Z0-9]{4})'", re.I)
+        pix_re_b = re.compile(r"^\s*\[\d+\]\s*:\s*'([A-Z0-9]{4})'", re.I | re.M)
+        size_re = re.compile(rf"\b{re.escape(size)}\b", re.I)
+        try:
+            out = subprocess.run(
+                ["v4l2-ctl", "-d", dev, "--list-formats-ext"],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).stdout
+        except Exception:
+            return False
+        if not out:
+            return False
+        current_code = None
+        for line in out.splitlines():
+            m = pix_re_a.search(line) or pix_re_b.search(line)
+            if m:
+                current_code = m.group(1).upper()
+                continue
+            if current_code in want and size_re.search(line):
+                return True
+        return False
+
+    def find_video_devices_specific_format(
         self,
         pixel_format: str = "H264",
         size: str = "640x480",
@@ -469,38 +456,35 @@ class RemoraCameraManager:
     ) -> list[str]:
         """Find video devices that support the specified pixel format and size."""
 
-        pix_re_a = re.compile(r"Pixel\s*Format\s*:\s*'([A-Z0-9]{4})'", re.I)
-        pix_re_b = re.compile(r"^\s*\[\d+\]\s*:\s*'([A-Z0-9]{4})'", re.I | re.M)
-        size_re = re.compile(rf"\b{re.escape(size)}\b", re.I)
-
         want = {pixel_format.upper()}
         if include_alias and pixel_format.upper() == "YUYV":
             want.add("YUY2")
 
-        def device_supports(dev: str) -> bool:
+        return [dev for dev in sorted(glob.glob(device_glob)) if self.device_supports(dev, size, want)]
+
+    def find_video_devices_specific_encoding(self, encoding: str = "H264") -> list[str]:
+        """Find all video devices that support the specified pixel format."""
+        want = {encoding.upper()}
+
+        devices = []
+        for dev in sorted(glob.glob("/dev/video*")):
             if not self.is_chardev(dev):
-                return False
+                continue
             try:
                 out = subprocess.run(
-                    ["v4l2-ctl", "-d", dev, "--list-formats-ext"],
+                    ["v4l2-ctl", "-d", dev, "--list-formats"],
                     check=False,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,
                     text=True,
                 ).stdout
             except Exception:
-                return False
+                continue
             if not out:
-                return False
-
-            current_code = None
+                continue
             for line in out.splitlines():
-                m = pix_re_a.search(line) or pix_re_b.search(line)
-                if m:
-                    current_code = m.group(1).upper()
-                    continue
-                if current_code in want and size_re.search(line):
-                    return True
-            return False
-
-        return [dev for dev in sorted(glob.glob(device_glob)) if device_supports(dev)]
+                m = re.search(r"Pixel\s*Format\s*:\s*'([A-Z0-9]{4})'", line, re.I)
+                if m and m.group(1).upper() in want:
+                    devices.append(dev)
+                    break
+        return devices

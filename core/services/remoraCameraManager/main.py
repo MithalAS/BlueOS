@@ -28,7 +28,7 @@ manager = RemoraCameraManager()
 logger.info(" Editor initialized.")
 
 
-@app.get("/video_ports", response_model=List[str])
+@app.get("/videoPorts", response_model=List[str])
 @version(1, 0)
 def get_video_ports() -> Any:
     ports = manager.available_video_ports()
@@ -36,7 +36,7 @@ def get_video_ports() -> Any:
     return ports
 
 
-@app.get("/video_port_formats", response_model=List[str])
+@app.get("/videoPortFormats", response_model=List[str])
 @version(1, 0)
 def get_video_port_formats(port: str = "/dev/video0") -> Any:
     try:
@@ -48,7 +48,7 @@ def get_video_port_formats(port: str = "/dev/video0") -> Any:
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
 
 
-@app.get("/uhubctrl_printout", response_model=List[str])
+@app.get("/uhubctrlPrintout", response_model=List[str])
 @version(1, 0)
 def get_uhubctrl_printout() -> Any:
     try:
@@ -138,13 +138,25 @@ def stop_stream(camera: str) -> Any:
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
 
 
-@app.get("/video_devices", response_model=List[str])
+@app.get("/videoDevicesSpecificFormat", response_model=List[str])
 @version(1, 0)
 def get_video_devices(
     pixel_format: str = "H264", size: str = "640x480", device_glob: str = "/dev/video*", include_alias: bool = False
 ) -> Any:
     try:
-        devices = manager.find_video_devices(pixel_format, size, device_glob, include_alias)
+        devices = manager.find_video_devices_specific_format(pixel_format, size, device_glob, include_alias)
+        logger.debug(f"Video devices found: {devices}.")
+        return devices
+    except Exception as e:
+        logger.error(f"Error finding video devices: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
+
+
+@app.get("/videoDevicesSpecificEncoding", response_model=List[str])
+@version(1, 0)
+def get_video_devices_encoding(encoding: str = "H264") -> Any:
+    try:
+        devices = manager.find_video_devices_specific_encoding(encoding)
         logger.debug(f"Video devices found: {devices}.")
         return devices
     except Exception as e:
