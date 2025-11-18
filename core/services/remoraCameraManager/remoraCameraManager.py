@@ -55,7 +55,7 @@ class RemoraCameraManager:
         self.settings_manager = Manager(SERVICE_NAME, SettingsV1, USERDATA / "settings" / SERVICE_NAME)
         self.settings_manager.load()
         if not self.settings_manager.settings.camera:
-            self.settings_manager.settings.camera = pyk.from_json(default_config, CameraConfig)
+            self.settings_manager.settings.camera = pyk.from_json(json.dumps(default_config), CameraConfig)
             self.settings_manager.save()
 
         self.usbControl = usbPortControl.Uhubctl(use_sudo=False)
