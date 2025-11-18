@@ -11,6 +11,7 @@ TOOLS=(
     linux2rest
     logviewer
     mavlink_camera_manager
+    mediamtx
     scripts
 )
 
@@ -19,5 +20,5 @@ parallel --halt now,fail=1 '/home/pi/tools/{}/bootstrap.sh' ::: "${TOOLS[@]}"
 # Tools that uses apt to do the installation
 # APT is terrible like pip and don't know how to handle parallel installation
 # These should periodically be moved onto the base image
-apt update && apt install -y --no-install-recommends dhcpcd5 iptables iproute2 isc-dhcp-client nmap
+apt update && apt install -y --no-install-recommends dhcpcd5 iptables iproute2 isc-dhcp-client nmap uhubctl ffmpeg v4l-utils
 apt clean && rm -rf /var/lib/apt/lists/*

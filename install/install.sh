@@ -170,10 +170,12 @@ test $NO_CLEAN || (
     ) || true
 )
 
+
 # Start installing necessary files and system configuration
 echo "Going to install BlueOS version ${VERSION}."
 
 echo "Downloading and installing udev rules."
+curl -fsSL $ROOT/install/udev/52-usb.rules -o "/etc/udev/rules.d/52-usb.rules"
 curl -fsSL $ROOT/install/udev/100.autopilot.rules -o /etc/udev/rules.d/100.autopilot.rules
 
 if [ -f /etc/dhcpcd.conf ]

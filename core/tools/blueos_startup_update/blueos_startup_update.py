@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import time
+from pathlib import Path
 from typing import List, Tuple
 import configparser
 
@@ -53,6 +54,7 @@ cmdline_file = None
 
 disabled_patches = [entry.strip() for entry in os.getenv("BLUEOS_DISABLE_PATCHES", "").split(",")]
 
+
 # Copyright 2016-2022 Paul Durivage
 # Licensed under the Apache License, Version 2.0 (the "License");
 # Based on: https://gist.github.com/angstwad/bf22d1822c38a92ec0a9
@@ -87,6 +89,47 @@ def update_startup() -> bool:
 
         # Patch applied and system needs to be restarted for it to take effect
         return True
+
+
+def update_usb_permissions() -> bool:
+    # temp rule path
+    tmp_rule_path = Path("/home/pi/52-usb.rules")
+    desired_rules = [
+        # Consider using the official uhubctl recommendations, or adjust matching here.
+        'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="32e4"',
+        'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="2109"',
+        'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="1d6b"',
+    ]
+    changed = False
+
+    try:
+
+        if not tmp_rule_path.exists():
+            logger.info("Rules file does not exist, creating it.")
+            tmp_rule_path.write_text("\n".join(desired_rules) + "\n", encoding="utf-8")
+            changed = True
+        else:
+            existing = tmp_rule_path.read_text(encoding="utf-8").splitlines()
+            with tmp_rule_path.open("a", encoding="utf-8") as f:
+                for line in desired_rules:
+                    if line not in existing:
+                        logger.info("Appending missing rule: %s", line)
+                        f.write(line + "\n")
+                        changed = True
+
+        if changed:
+            upload_existing_file(str(tmp_rule_path), "/etc/udev/rules.d/52-usb.rules", check=True)
+            run_command("udevadm control --reload-rules", False)
+            run_command("udevadm trigger --subsystem-match=usb", False)
+            logger.info("udev rules reloaded and triggered.")
+        else:
+            logger.info("No changes needed; rules already present.")
+
+        return changed
+
+    except Exception as e:
+        logger.exception("Failed to update USB permissions: %s", e)
+        return False
 
 
 def boot_config_get_or_append_section(config_content: List[str], section_name: str) -> Tuple[int, int]:
@@ -253,7 +296,7 @@ def update_cgroups() -> bool:
         ("cgroup_memory", "1"),
         ("cgroup_enable", "memory"),
     ]
-    for (config_key, config_value) in cgroups:
+    for config_key, config_value in cgroups:
         boot_cmdline_add_config(cmdline_content, config_key, config_value)
 
     # Don't need to apply or restart if the content is the same
@@ -408,7 +451,7 @@ def update_navigator_overlays() -> bool:
     navigator_configs_with_match_patterns.reverse()
 
     pi4_section_name = "pi4"
-    for (config, config_match_pattern) in navigator_configs_with_match_patterns:
+    for config, config_match_pattern in navigator_configs_with_match_patterns:
         # Add each navigator configuration to pi4 section
         boot_config_add_configuration_at_section(config_content, config, pi4_section_name)
 
@@ -496,7 +539,7 @@ def ensure_ipv6_disabled() -> bool:
 
     # Make sure every required entry is in the file and uncommented
     needs_update = False
-    for (desired, pattern) in required_entries:
+    for desired, pattern in required_entries:
         entry_match = pattern.search(sysctl_config_file)
         if entry_match:
             line_result = entry_match.group(0)
@@ -710,6 +753,7 @@ def main() -> int:
     # TODO: parse tag as semver and check before applying patches
     patches_to_apply = [
         ("startup", update_startup),
+        ("usb_permissions", update_usb_permissions),
         ("userdata", ensure_user_data_structure_is_in_place),
         ("nginx", ensure_nginx_permissions),
         ("dns", create_dns_conf_host_link),
