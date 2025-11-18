@@ -25,12 +25,12 @@ class CameraSideConfig(JsonObject):
 
 
 class CameraConfig(JsonObject):
-    PORT = IntegerField()
-    IP = StringField()
-    USE_HW_ENC = BooleanField()
-    USB_HUB = StringField()
-    FRONT = ObjectField(CameraSideConfig)
-    BACK = ObjectField(CameraSideConfig)
+    port = IntegerField()
+    ip = StringField()
+    use_hw_enc = BooleanField()
+    usb_hub = StringField()
+    front = ObjectField(CameraSideConfig)
+    back = ObjectField(CameraSideConfig)
 
 
 # ---------- Settings container (single version) ------------------------------

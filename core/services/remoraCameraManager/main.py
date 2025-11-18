@@ -198,7 +198,7 @@ def reset_config_to_default() -> Any:
         raise HTTPException(status_code=500, detail=f"Internal server error: {e}") from e
 
 
-app = VersionedFastAPI(app, version="1.0.0", prefix_format="/v{major}.{minor}", enable_latest=True)
+versioned_app = VersionedFastAPI(app, version="1.0.0", prefix_format="/v{major}.{minor}", enable_latest=True)
 
 
 @app.get("/")
@@ -215,4 +215,4 @@ async def root() -> Any:
 
 if __name__ == "__main__":
     # Running uvicorn with log disabled so loguru can handle it
-    uvicorn.run(app, host="0.0.0.0", port=9112, log_config=None)
+    uvicorn.run(versioned_app, host="0.0.0.0", port=9112, log_config=None)

@@ -23,11 +23,11 @@ USERDATA = Path("/usr/blueos/userdata/")
 
 pyk = Pykson()
 default_config: Dict[str, Any] = {
-    "PORT": 8554,
-    "IP": "127.0.0.1",
-    "USE_HW_ENC": False,
-    "USB_HUB": "1-1",
-    "FRONT": {
+    "port": 8554,
+    "ip": "127.0.0.1",
+    "use_hw_enc": False,
+    "usb_hub": "1-1",
+    "front": {
         "usb_hub_port": 2,
         "device": "/dev/video4",
         "resolution": "640x480",
@@ -36,7 +36,7 @@ default_config: Dict[str, Any] = {
         "kbitrate": 1000,
         "preset": "superfast",
     },
-    "BACK": {
+    "back": {
         "usb_hub_port": 1,
         "device": "/dev/video0",
         "resolution": "640x480",
@@ -55,7 +55,7 @@ class RemoraCameraManager:
         self.settings_manager = Manager(SERVICE_NAME, SettingsV1, USERDATA / "settings" / SERVICE_NAME)
         self.settings_manager.load()
         if not self.settings_manager.settings.camera:
-            self.settings_manager.settings.camera = pyk.from_json(default_config, CameraConfig)
+            self.settings_manager.settings.camera = pyk.from_json(json.dumps(default_config), CameraConfig)
             self.settings_manager.save()
 
         self.usbControl = usbPortControl.Uhubctl(use_sudo=False)
@@ -91,12 +91,12 @@ class RemoraCameraManager:
         return json.loads(pyk.to_json(self.settings_manager.settings.camera))
 
     def set_config(self, new_config: dict[str, Any]) -> None:
-        self.settings_manager.settings.camera = pyk.from_json(new_config, CameraConfig)
+        self.settings_manager.settings.camera = pyk.from_json(json.dumps(new_config), CameraConfig)
         self.settings_manager.save()
 
     def set_default_config(self) -> None:
         """Set the camera configuration to default values."""
-        self.settings_manager.settings.camera = pyk.from_json(default_config, CameraConfig)
+        self.settings_manager.settings.camera = pyk.from_json(json.dumps(default_config), CameraConfig)
         self.settings_manager.save()
 
     def available_video_ports(self) -> list[str]:
@@ -135,15 +135,15 @@ class RemoraCameraManager:
     def power_cycle_camera(self, cam: str) -> str:
         """Power cycle the specified camera."""
         if cam == "front":
-            port = self.settings_manager.settings.camera.FRONT.usb_hub_port
+            port = self.settings_manager.settings.camera.front.usb_hub_port
         elif cam == "back":
-            port = self.settings_manager.settings.camera.BACK.usb_hub_port
+            port = self.settings_manager.settings.camera.back.usb_hub_port
         else:
             raise ValueError(f"Unknown camera '{cam}'. Valid options are 'front' or 'back'.")
 
         if port is None:
             raise ValueError(f"usb_hub_port not defined for camera '{cam}'.")
-        location = self.settings_manager.settings.camera.USB_HUB
+        location = self.settings_manager.settings.camera.usb_hub
         self.usbControl.power_cycle(location=location, port=port, off_seconds=10.0)  # power cycle for 10 seconds
         return f"Camera '{cam}' power cycled on hub {location} port {port} for 10 seconds."
 
@@ -273,9 +273,9 @@ class RemoraCameraManager:
                 "-b:v",
                 bitrate,
                 "-maxrate",
-                str(int(kbitrate) * 1200),
+                str(int(kbitrate) * 1.2),
                 "-bufsize",
-                str(int(kbitrate) * 1500),
+                str(int(kbitrate) * 1.5),
                 "-g",
                 str(fps),
             ]
@@ -295,9 +295,9 @@ class RemoraCameraManager:
                 "-b:v",
                 bitrate,
                 "-maxrate",
-                str(int(kbitrate) * 1200),
+                str(int(kbitrate) * 1.2),
                 "-bufsize",
-                str(int(kbitrate) * 2000),
+                str(int(kbitrate) * 2.0),
                 "-g",
                 str(fps),
                 "-bf",
@@ -308,14 +308,14 @@ class RemoraCameraManager:
     def start_stream(self, camera: str) -> str:
         """Start streaming for the specified camera."""
         if camera == "front":
-            cam_config = self.settings_manager.settings.camera.FRONT
+            cam_config = self.settings_manager.settings.camera.front
         elif camera == "back":
-            cam_config = self.settings_manager.settings.camera.BACK
+            cam_config = self.settings_manager.settings.camera.back
         else:
             raise ValueError(f"Camera '{camera}' not found in configuration.")
 
         device = cam_config.device
-        use_hw = self.settings_manager.settings.camera.USE_HW_ENC
+        use_hw = self.settings_manager.settings.camera.use_hw_enc
 
         if device is None:
             raise ValueError(f"Device not defined for camera '{camera}'.")
@@ -326,7 +326,7 @@ class RemoraCameraManager:
             print("MediaMTX server is not running. Might cause streaming issues.")
 
         # RTSP output
-        rtsp_url = f"rtsp://{self.settings_manager.settings.camera.IP}:{self.settings_manager.settings.camera.PORT}/{cam_config.name}"
+        rtsp_url = f"rtsp://{self.settings_manager.settings.camera.ip}:{self.settings_manager.settings.camera.port}/{cam_config.name}"
         cmd += [
             "-f",
             "rtsp",
@@ -341,7 +341,7 @@ class RemoraCameraManager:
 
         # Start the ffmpeg process
         # pylint: disable=consider-using-with
-        proc = subprocess.Popen(cmd)
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         sleep(1.0)  # give it a moment to start
 
         if proc.poll() is not None:
@@ -352,9 +352,9 @@ class RemoraCameraManager:
     def stop_stream(self, camera: str) -> str:
         """Stop streaming for the specified camera."""
         if camera == "front":
-            cam_config = self.settings_manager.settings.camera.FRONT
+            cam_config = self.settings_manager.settings.camera.front
         elif camera == "back":
-            cam_config = self.settings_manager.settings.camera.BACK
+            cam_config = self.settings_manager.settings.camera.back
         elif camera == "all":
             return self.kill_all_streams()
         else:
@@ -371,7 +371,7 @@ class RemoraCameraManager:
                 [
                     "pgrep",
                     "-f",
-                    f"rtsp://{self.settings_manager.settings.camera.IP}:{self.settings_manager.settings.camera.PORT}/{name}",
+                    f"rtsp://{self.settings_manager.settings.camera.ip}:{self.settings_manager.settings.camera.port}/{name}",
                 ],
                 capture_output=True,
                 text=True,
