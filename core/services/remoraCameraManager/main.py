@@ -201,7 +201,7 @@ def reset_config_to_default() -> Any:
 versioned_app = VersionedFastAPI(app, version="1.0.0", prefix_format="/v{major}.{minor}", enable_latest=True)
 
 
-@app.get("/")
+@versioned_app.get("/")
 async def root() -> Any:
     html_content = """
     <html>
