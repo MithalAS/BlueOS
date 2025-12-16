@@ -290,7 +290,25 @@ if [ -z "$SKIP_KERNEL_INSTALL" ]; then
     KERNEL_DEB_FILENAME="linux-image-${KERNEL_VERSION}-${KERNEL_COMPILE_BASE}_${KERNEL_ARCH_SUFFIX}.deb"
 
     echo "Installing kernel version ${KERNEL_VERSION} with compile base ${KERNEL_COMPILE_BASE} and arch ${KERNEL_ARCH_SUFFIX}."
-    wget "https://github.com/MithalAS/BlueOS/raw/refs/heads/${VERSION}/${KERNEL_DEB_FILENAME}"
+
+    # Try to download the kernel package from a tag first, then from a branch (heads) as a fallback.
+    KERNEL_URL_TAGS="${REMOTE}/refs/tags/${VERSION}/${KERNEL_DEB_FILENAME}"
+    KERNEL_URL_HEADS="${REMOTE}/refs/heads/${VERSION}/${KERNEL_DEB_FILENAME}"
+
+    echo "Attempting to download kernel package (tags then heads)" >> "$STATUS_FILE"
+    if wget -q -O "${KERNEL_DEB_FILENAME}" "$KERNEL_URL_TAGS"; then
+        echo "Downloaded kernel package from tags: ${KERNEL_URL_TAGS}" >> "$STATUS_FILE"
+    elif wget -q -O "${KERNEL_DEB_FILENAME}" "$KERNEL_URL_HEADS"; then
+        echo "Downloaded kernel package from heads: ${KERNEL_URL_HEADS}" >> "$STATUS_FILE"
+    else
+        {
+            echo "Failed to download kernel package from both tags and heads:"
+            echo "  tried: ${KERNEL_URL_TAGS}"
+            echo "  tried: ${KERNEL_URL_HEADS}"
+            echo "Aborting kernel installation."
+        } >> "$STATUS_FILE"
+        exit 1
+    fi
 
     if sudo dpkg -i "${KERNEL_DEB_FILENAME}"; then
         echo "Kernel package installed successfully." >> "$STATUS_FILE"
