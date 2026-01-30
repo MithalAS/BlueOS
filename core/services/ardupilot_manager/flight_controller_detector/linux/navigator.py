@@ -1,11 +1,17 @@
 import platform
 from typing import Any, List
+import glob
+import os
 
 from commonwealth.utils.commands import load_file
 from elftools.elf.elffile import ELFFile
 
 from flight_controller_detector.linux.linux_boards import LinuxFlightController
 from typedefs import Platform, Serial
+
+
+def _existing(paths):
+    return [p for p in paths if os.path.exists(p)]
 
 
 class Navigator(LinuxFlightController):
@@ -75,12 +81,20 @@ class NavigatorPi5(Navigator):
     }
 
     def get_serials(self) -> List[Serial]:
-        return [
-            Serial(port="C", endpoint="/dev/ttyAMA0"),
-            Serial(port="B", endpoint="/dev/ttyAMA2"),
-            Serial(port="E", endpoint="/dev/ttyAMA3"),
-            Serial(port="F", endpoint="/dev/ttyAMA4"),
-        ]
+        # Find all PL011 UARTs exposed by overlays
+        ama = sorted(glob.glob("/dev/ttyAMA*"))
+
+        if not ama:
+            raise RuntimeError("No ttyAMA devices found")
+
+        # Map in a stable order
+        ports = ["C", "B", "E", "F"]
+
+        serials = []
+        for port, dev in zip(ports, ama):
+            serials.append(Serial(port=port, endpoint=dev))
+
+        return serials
 
     def detect(self) -> bool:
         if not self.is_pi5():
