@@ -1,7 +1,7 @@
-import platform
-from typing import Any, List
 import glob
 import os
+import platform
+from typing import Any, List
 
 from commonwealth.utils.commands import load_file
 from elftools.elf.elffile import ELFFile
@@ -10,7 +10,7 @@ from flight_controller_detector.linux.linux_boards import LinuxFlightController
 from typedefs import Platform, Serial
 
 
-def _existing(paths):
+def _existing(paths: list[str]) -> list[str]:
     return [p for p in paths if os.path.exists(p)]
 
 
