@@ -33,8 +33,16 @@ class Navigator(LinuxFlightController):
         super().__init__(**data, name=name, platform=plat)
 
     def is_pi5(self) -> bool:
-        with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
-            return "Raspberry Pi 5" in f.read()
+        try:
+            with open("/proc/device-tree/model", "r", encoding="utf-8") as f:
+                model = f.read().strip("\x00").strip()
+            # Treat Pi 5 and CM5 the same for mapping purposes
+            return ("Raspberry Pi 5" in model) or ("Compute Module 5" in model) or ("CM5" in model)
+        except FileNotFoundError:
+            # Fallback: cpuinfo (less reliable for CM variants)
+            with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
+                txt = f.read()
+            return ("Raspberry Pi 5" in txt) or ("Compute Module 5" in txt) or ("CM5" in txt)
 
     def detect(self) -> bool:
         return False
@@ -100,6 +108,36 @@ class NavigatorPi5(Navigator):
         if not self.is_pi5():
             return False
         return all(self.check_for_i2c_device(bus, address) for address, bus in self.devices.values())
+
+
+class NaviCubePi5(NaviCube):
+    devicesV100 = {"LIS3MDL": (0x1C, 1), "ADS1115": (0x48, 1), "EEPROM": (0x58, 0)}
+    devicesV110 = {"BMM350": (0x14, 1), "ADS1115": (0x48, 1), "EEPROM": (0x58, 0)}
+
+    def get_serials(self) -> List[Serial]:
+        # Find all PL011 UARTs exposed by overlays
+        ama = sorted(glob.glob("/dev/ttyAMA*"))
+
+        if not ama:
+            raise RuntimeError("No ttyAMA devices found")
+
+        # Map in a stable order
+        ports = ["C", "B", "E", "F"]
+
+        serials = []
+        for port, dev in zip(ports, ama):
+            serials.append(Serial(port=port, endpoint=dev))
+
+        return serials
+
+    def detect(self) -> bool:
+        if not self.is_pi5():
+            return False
+        if all(self.check_for_i2c_device(bus, address) for address, bus in self.devicesV100.values()):
+            return True
+        if all(self.check_for_i2c_device(bus, address) for address, bus in self.devicesV110.values()):
+            return True
+        return False
 
 
 class NavigatorPi4(Navigator):
