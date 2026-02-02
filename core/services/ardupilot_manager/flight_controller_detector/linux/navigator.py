@@ -70,8 +70,14 @@ class NaviCube(LinuxFlightController):
         super().__init__(**data, name=name, platform=plat)
 
     def is_pi5(self) -> bool:
-        with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
-            return "Raspberry Pi 5" in f.read()
+        try:
+            with open("/proc/device-tree/model", "r", encoding="utf-8") as f:
+                model = f.read().strip("\x00").strip()
+            return ("Raspberry Pi 5" in model) or ("Compute Module 5" in model) or ("CM5" in model)
+        except FileNotFoundError:
+            with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
+                txt = f.read()
+            return ("Raspberry Pi 5" in txt) or ("Compute Module 5" in txt) or ("CM5" in txt)
 
     def detect(self) -> bool:
         return False

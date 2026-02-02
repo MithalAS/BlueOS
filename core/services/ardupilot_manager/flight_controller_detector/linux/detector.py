@@ -7,6 +7,7 @@ from flight_controller_detector.linux.argonot import Argonot
 from flight_controller_detector.linux.linux_boards import LinuxFlightController
 from flight_controller_detector.linux.navigator import (
     NaviCubePi4,
+    NaviCubePi5,
     NavigatorPi4,
     NavigatorPi5,
 )
