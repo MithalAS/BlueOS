@@ -192,42 +192,45 @@ class AutoPilotManager(metaclass=Singleton):
     async def auto_restart_ardupilot(self) -> None:
         """Auto-restart Ardupilot when it's not running but was supposed to."""
         while True:
-            needs_restart = self.should_be_running and not self.is_running()
-            if needs_restart:
-                logger.debug("Restarting ardupilot...")
-                try:
-                    await self.kill_ardupilot()
-                except Exception as error:
-                    logger.warning(f"Could not kill Ardupilot: {error}")
-                try:
-                    await self.start_ardupilot()
-                except Exception as error:
-                    logger.warning(f"Could not start Ardupilot: {error}")
+            try:
+                needs_restart = self.should_be_running and not self.is_running()
+                if needs_restart:
+                    logger.debug("Restarting ardupilot...")
+                    try:
+                        await self.kill_ardupilot()
+                    except Exception as error:
+                        logger.warning(f"Could not kill Ardupilot: {error}")
+                    try:
+                        await self.start_ardupilot()
+                    except Exception as error:
+                        logger.warning(f"Could not start Ardupilot: {error}")
 
-            # Monitor MAVLink heartbeat while autopilot is supposed to be running
-            if self.should_be_running and self.is_running():
-                try:
-                    alive = await self.vehicle_manager.is_heart_beating()
-                    if alive:
-                        self._heartbeat_fail_count = 0
-                    else:
+                # Monitor MAVLink heartbeat while autopilot is supposed to be running
+                if self.should_be_running and self.is_running():
+                    try:
+                        alive = await self.vehicle_manager.is_heart_beating()
+                        if alive:
+                            self._heartbeat_fail_count = 0
+                        else:
+                            self._heartbeat_fail_count += 1
+                            logger.warning(
+                                f"Heartbeat check False ({self._heartbeat_fail_count}/{self._max_heartbeat_failures})"
+                            )
+                    except Exception as error:
                         self._heartbeat_fail_count += 1
                         logger.warning(
-                            f"Heartbeat check False ({self._heartbeat_fail_count}/{self._max_heartbeat_failures})"
+                            f"heartbeat check failed ({self._heartbeat_fail_count}/{self._max_heartbeat_failures}): {error}"
                         )
-                except Exception as error:
-                    self._heartbeat_fail_count += 1
-                    logger.warning(
-                        f"heartbeat check failed ({self._heartbeat_fail_count}/{self._max_heartbeat_failures}): {error}"
-                    )
 
-                if self._heartbeat_fail_count >= self._max_heartbeat_failures:
-                    logger.warning("Consecutive heartbeat failures threshold reached — restarting Ardupilot.")
-                    try:
-                        await self.restart_ardupilot()
-                    except Exception as error:
-                        logger.warning(f"Failed to restart Ardupilot after heartbeat failures: {error}")
-                    self._heartbeat_fail_count = 0
+                    if self._heartbeat_fail_count >= self._max_heartbeat_failures:
+                        logger.warning("Consecutive heartbeat failures threshold reached — restarting Ardupilot.")
+                        try:
+                            await self.restart_ardupilot()
+                        except Exception as error:
+                            logger.warning(f"Failed to restart Ardupilot after heartbeat failures: {error}")
+                        self._heartbeat_fail_count = 0
+            except Exception as error:
+                logger.exception(f"Unexpected error in auto_restart_ardupilot loop: {error}")
 
             await asyncio.sleep(5.0)
 
@@ -525,14 +528,16 @@ class AutoPilotManager(metaclass=Singleton):
 
         def is_ardupilot_process(process: psutil.Process) -> bool:
             """Checks if given process is using a Ardupilot's firmware file, for any known platform."""
+            try:
+                cmdline = " ".join(process.cmdline())
+            except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied):
+                # Process may have died, become zombie, or be inaccessible before we can inspect cmdline.
+                return False
+
             for platform in Platform:
                 firmware_path = self.firmware_manager.firmware_path(platform)
-                try:
-                    if str(firmware_path) in " ".join(process.cmdline()):
-                        return True
-                except psutil.NoSuchProcess:
-                    # process may have died before we could call cmdline()
-                    pass
+                if str(firmware_path) in cmdline:
+                    return True
             return False
 
         return list(filter(is_ardupilot_process, psutil.process_iter()))
