@@ -265,23 +265,23 @@ systemctl disable NetworkManager-wait-online.service || true
 
 echo "Architecture: $ARCHITECTURE"
 # Group kernel version variables for clarity
-KERNEL_BASE_VERSION="6.6.74-remora+"
-KERNEL_VERSION="${KERNEL_BASE_VERSION}_6.6.74"
+KERNEL_BASE_VERSION="5.10.110-rem-a892238df-v7l+"
+KERNEL_VERSION="${KERNEL_BASE_VERSION}_5.10.110"
 KERNEL_IMAGE_NAME="vmlinuz-${KERNEL_BASE_VERSION}"
-KERNEL_OVERLAY_SRC_DIR="/lib/linux-image-${KERNEL_BASE_VERSION}/overlays"
-KERNEL_COMPILE_BASE="g85f48972aed1-2"
+KERNEL_OVERLAY_SRC_DIR="/usr/lib/linux-image-${KERNEL_BASE_VERSION}/overlays"
+KERNEL_COMPILE_BASE="rem-a892238df-1"
 OVERLAY_SPI1="spi1-3cs.dtbo"
 OVERLAY_XRM="xrm117x-i2c6.dtbo"
 STATUS_FILE="$HOME/kernel_install_status.txt"
 
 # Set architecture-specific variables
 if [ "$ARCHITECTURE" = "armv7l" ] || [ "$ARCHITECTURE" = "armhf" ]; then
-    echo "Installing armv7l/armhf kernel" >> "$STATUS_FILE" # linux-image-6.6.74-remora+_6.6.74-gb9c846862b03-2_armhf.deb
+    echo "Installing armv7l/armhf kernel" >> "$STATUS_FILE" # linux-image-5.10.110-rem-a892238df-v7l+_5.10.110-rem-a892238df-1_armhf.deb
     KERNEL_ARCH_SUFFIX="armhf"
     CONFIG_TXT_PATH="/boot/config.txt"
     OVERLAY_PATH="/boot/overlays"
 elif [ "$ARCHITECTURE" = "aarch64" ]; then
-    echo "Installing aarch64 kernel" >> "$STATUS_FILE" # linux-image-6.6.74-remora+_6.6.74-gb9c846862b03-2_arm64.deb
+    echo "Installing aarch64 kernel" >> "$STATUS_FILE" # linux-image-5.10.110-rem-a892238df-v8+_5.10.110-rem-a892238df-1_arm64.deb
     KERNEL_ARCH_SUFFIX="arm64"
     CONFIG_TXT_PATH="/boot/firmware/config.txt"
     OVERLAY_PATH="/boot/firmware/overlays"
@@ -340,10 +340,10 @@ if [ -z "$SKIP_KERNEL_INSTALL" ]; then
         echo "$KERNEL_LINE" | sudo tee -a "$CONFIG_TXT_PATH" >> /dev/null
     fi
 
-    echo "Add additional config entries (arm_64 and dtoverlays)"
+    echo "Add additional config entries (arm_64bit and dtoverlays)"
     # The grep -qxF ... || echo ... | sudo tee -a ... ensures the line is present only once in the config file.
     if [ "$ARCHITECTURE" = "aarch64" ]; then
-        LINE="arm_64=1"
+        LINE="arm_64bit=1"
         grep -qxF "$LINE" "$CONFIG_TXT_PATH" || echo "$LINE" | sudo tee -a "$CONFIG_TXT_PATH"
     fi
     LINE="dtoverlay=xrm117x-i2c6"
