@@ -264,11 +264,9 @@ echo "disabling NetworkManager-wait-online.service"
 systemctl disable NetworkManager-wait-online.service || true
 
 echo "Architecture: $ARCHITECTURE"
-# Group kernel version variables for clarity
+
+# Default to the v7l+ build (32-bit Raspberry Pi). For aarch64 we'll override below.
 KERNEL_BASE_VERSION="5.10.110-rem-a892238df-v7l+"
-KERNEL_VERSION="${KERNEL_BASE_VERSION}_5.10.110"
-KERNEL_IMAGE_NAME="vmlinuz-${KERNEL_BASE_VERSION}"
-KERNEL_OVERLAY_SRC_DIR="/usr/lib/linux-image-${KERNEL_BASE_VERSION}/overlays"
 KERNEL_COMPILE_BASE="rem-a892238df-1"
 OVERLAY_SPI1="spi1-3cs.dtbo"
 OVERLAY_XRM="xrm117x-i2c6.dtbo"
@@ -285,10 +283,18 @@ elif [ "$ARCHITECTURE" = "aarch64" ]; then
     KERNEL_ARCH_SUFFIX="arm64"
     CONFIG_TXT_PATH="/boot/firmware/config.txt"
     OVERLAY_PATH="/boot/firmware/overlays"
+    # Use the v8+ base name for 64-bit kernel packages
+    KERNEL_BASE_VERSION="5.10.110-rem-a892238df-v8+"
 else
     echo "Unsupported architecture: $ARCHITECTURE for kernel installation, SKIPPING!" >> "$STATUS_FILE"
     SKIP_KERNEL_INSTALL=1
 fi
+
+# Now that `KERNEL_BASE_VERSION` may have been adjusted for the architecture,
+# compute variables that depend on it.
+KERNEL_VERSION="${KERNEL_BASE_VERSION}_5.10.110"
+KERNEL_IMAGE_NAME="vmlinuz-${KERNEL_BASE_VERSION}"
+KERNEL_OVERLAY_SRC_DIR="/usr/lib/linux-image-${KERNEL_BASE_VERSION}/overlays"
 
 if [ -z "$SKIP_KERNEL_INSTALL" ]; then
     KERNEL_DEB_FILENAME="linux-image-${KERNEL_VERSION}-${KERNEL_COMPILE_BASE}_${KERNEL_ARCH_SUFFIX}.deb"
