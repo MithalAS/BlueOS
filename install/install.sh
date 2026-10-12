@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
 # Set desired version to be installed
-VERSION="${VERSION:-master}"
-GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-bluerobotics/BlueOS}
+DOCKER_USER="goaschris"  # couldnt work out where to place this var
+VERSION="${VERSION:-1.4.5}"
+GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-MithalAS/blueOS}
 DOCKER_USER=${DOCKER_USER:-$(echo $GITHUB_REPOSITORY | cut -d'/' -f1 | tr '[:upper:]' '[:lower:]')}
 REMOTE="${REMOTE:-https://raw.githubusercontent.com/${GITHUB_REPOSITORY}}"
 ROOT="$REMOTE/$VERSION"
@@ -203,6 +204,7 @@ test $NO_CLEAN || (
     ) || true
 )
 
+
 # Start installing necessary files and system configuration
 echo "Going to install BlueOS version ${VERSION}."
 
@@ -223,7 +225,7 @@ fi
 echo "Downloading bootstrap"
 BLUEOS_BOOTSTRAP="$DOCKER_USER/blueos-bootstrap:$VERSION" # Use current version
 BLUEOS_CORE="$DOCKER_USER/blueos-core:$VERSION" # We don't have a stable tag yet
-BLUEOS_FACTORY="bluerobotics/blueos-core:factory" # used for "factory reset"
+BLUEOS_FACTORY="$DOCKER_USER/blueos-core:factory" # used for "factory reset"
 
 if [ -n "$LOCAL_IMAGES_DIR" ]
 then
@@ -298,7 +300,9 @@ echo "Restarting random-seeds."
 rm -rf /var/lib/systemd/random-seed /loader/random-seed
 
 echo "creating dns link"
-sudo ln --force /etc/resolv.conf /etc/resolv.conf.host
+if [ ! -e /etc/resolv.conf.host ]; then
+    sudo ln /etc/resolv.conf /etc/resolv.conf.host
+fi
 
 echo "disabling NetworkManager-wait-online.service"
 systemctl disable NetworkManager-wait-online.service || true
@@ -309,6 +313,102 @@ systemctl disable NetworkManager-wait-online.service || true
 # Only Bullseye ships this drop-in. Drop this once we no longer support Bullseye.
 echo "Removing dhcpcd wait for network at boot."
 rm -f /etc/systemd/system/dhcpcd.service.d/wait.conf
+
+echo "Architecture: $ARCHITECTURE"
+
+# Default to the v7l+ build (32-bit Raspberry Pi). For aarch64 we'll override below.
+KERNEL_BASE_VERSION="5.10.110-rem-a892238df-v7l+"
+KERNEL_COMPILE_BASE="rem-a892238df-1"
+OVERLAY_SPI1="spi1-3cs.dtbo"
+OVERLAY_XRM="xrm117x-i2c6.dtbo"
+STATUS_FILE="$HOME/kernel_install_status.txt"
+
+# Set architecture-specific variables
+if [ "$ARCHITECTURE" = "armv7l" ] || [ "$ARCHITECTURE" = "armv7" ] || [ "$ARCHITECTURE" = "armhf" ]; then
+    echo "Installing armv7l/armv7/armhf kernel" >> "$STATUS_FILE" # linux-image-5.10.110-rem-a892238df-v7l+_5.10.110-rem-a892238df-1_armhf.deb
+    KERNEL_ARCH_SUFFIX="armhf"
+    CONFIG_TXT_PATH="/boot/config.txt"
+    OVERLAY_PATH="/boot/overlays"
+elif [ "$ARCHITECTURE" = "aarch64" ]; then
+    echo "Installing aarch64 kernel" >> "$STATUS_FILE" # linux-image-5.10.110-rem-a892238df-v8+_5.10.110-rem-a892238df-1_arm64.deb
+    KERNEL_ARCH_SUFFIX="arm64"
+    CONFIG_TXT_PATH="/boot/firmware/config.txt"
+    OVERLAY_PATH="/boot/firmware/overlays"
+    # Use the v8+ base name for 64-bit kernel packages
+    KERNEL_BASE_VERSION="5.10.110-rem-a892238df-v8+"
+else
+    echo "Unsupported architecture: $ARCHITECTURE for kernel installation, SKIPPING!" >> "$STATUS_FILE"
+    SKIP_KERNEL_INSTALL=1
+fi
+
+# Now that `KERNEL_BASE_VERSION` may have been adjusted for the architecture,
+# compute variables that depend on it.
+KERNEL_VERSION="${KERNEL_BASE_VERSION}_5.10.110"
+KERNEL_IMAGE_NAME="vmlinuz-${KERNEL_BASE_VERSION}"
+KERNEL_OVERLAY_SRC_DIR="/usr/lib/linux-image-${KERNEL_BASE_VERSION}/overlays"
+
+if [ -z "$SKIP_KERNEL_INSTALL" ]; then
+    KERNEL_DEB_FILENAME="linux-image-${KERNEL_VERSION}-${KERNEL_COMPILE_BASE}_${KERNEL_ARCH_SUFFIX}.deb"
+
+    echo "Installing kernel version ${KERNEL_VERSION} with compile base ${KERNEL_COMPILE_BASE} and arch ${KERNEL_ARCH_SUFFIX}."
+
+    # Try to download the kernel package from a tag first, then from a branch (heads) as a fallback.
+    # PR builds serve scripts locally but fetch kernels from the PR's head repository and branch.
+    KERNEL_REMOTE="${KERNEL_REMOTE:-$REMOTE}"
+    KERNEL_REF="${KERNEL_REF:-$VERSION}"
+    KERNEL_URL_TAGS="${KERNEL_REMOTE}/refs/tags/${KERNEL_REF}/${KERNEL_DEB_FILENAME}"
+    KERNEL_URL_HEADS="${KERNEL_REMOTE}/refs/heads/${KERNEL_REF}/${KERNEL_DEB_FILENAME}"
+
+    echo "Attempting to download kernel package (tags then heads)" >> "$STATUS_FILE"
+    if wget -q -O "${KERNEL_DEB_FILENAME}" "$KERNEL_URL_TAGS"; then
+        echo "Downloaded kernel package from tags: ${KERNEL_URL_TAGS}" >> "$STATUS_FILE"
+    elif wget -q -O "${KERNEL_DEB_FILENAME}" "$KERNEL_URL_HEADS"; then
+        echo "Downloaded kernel package from heads: ${KERNEL_URL_HEADS}" >> "$STATUS_FILE"
+    else
+        {
+            echo "Failed to download kernel package from both tags and heads:"
+            echo "  tried: ${KERNEL_URL_TAGS}"
+            echo "  tried: ${KERNEL_URL_HEADS}"
+            echo "Aborting kernel installation."
+        } | tee -a "$STATUS_FILE" >&2
+        exit 1
+    fi
+
+    if sudo dpkg -i "${KERNEL_DEB_FILENAME}"; then
+        echo "Kernel package installed successfully." >> "$STATUS_FILE"
+    else
+        echo "Kernel package installation failed." | tee -a "$STATUS_FILE" >&2
+        exit 1
+    fi
+
+    echo "Copy overlays (dtbo)" >> "$STATUS_FILE"
+    sudo cp "${KERNEL_OVERLAY_SRC_DIR}/${OVERLAY_SPI1}" "$OVERLAY_PATH/${OVERLAY_SPI1}"
+    sudo cp "${KERNEL_OVERLAY_SRC_DIR}/${OVERLAY_XRM}" "$OVERLAY_PATH/${OVERLAY_XRM}"
+
+    if [ "$ARCHITECTURE" = "aarch64" ]; then
+        echo "Copying 64bit kernel to firmware" >> "$STATUS_FILE"
+        sudo cp "/boot/${KERNEL_IMAGE_NAME}" "/boot/firmware/${KERNEL_IMAGE_NAME}"
+    fi
+
+    echo "Updating kernel entry in $CONFIG_TXT_PATH" >> "$STATUS_FILE"
+    KERNEL_LINE="kernel=${KERNEL_IMAGE_NAME}"
+
+    # If kernel= line exists, replace it. If not, append the correct one.
+    if grep -q "^kernel=" "$CONFIG_TXT_PATH"; then
+        sudo sed -i "s/^kernel=.*/$KERNEL_LINE/" "$CONFIG_TXT_PATH"
+    else
+        echo "$KERNEL_LINE" | sudo tee -a "$CONFIG_TXT_PATH" >> /dev/null
+    fi
+
+    echo "Add additional config entries (arm_64bit and dtoverlays)"
+    # The grep -qxF ... || echo ... | sudo tee -a ... ensures the line is present only once in the config file.
+    if [ "$ARCHITECTURE" = "aarch64" ]; then
+        LINE="arm_64bit=1"
+        grep -qxF "$LINE" "$CONFIG_TXT_PATH" || echo "$LINE" | sudo tee -a "$CONFIG_TXT_PATH"
+    fi
+    LINE="dtoverlay=xrm117x-i2c6"
+    grep -qxF "$LINE" "$CONFIG_TXT_PATH" || echo "$LINE" | sudo tee -a "$CONFIG_TXT_PATH"
+fi
 
 echo "Installation finished successfully."
 echo "You can access after the reboot:"
