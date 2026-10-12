@@ -90,6 +90,45 @@ def update_startup() -> bool:
         return True
 
 
+def update_usb_permissions() -> bool:
+    tmp_rule_path = Path("/home/pi/52-usb.rules")
+    desired_rules = [
+        'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="32e4"',
+        'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="2109"',
+        'SUBSYSTEM=="usb", DRIVER=="hub|usb", MODE="0666", ATTR{idVendor}=="1d6b"',
+    ]
+    changed = False
+
+    try:
+
+        if not tmp_rule_path.exists():
+            logger.info("Rules file does not exist, creating it.")
+            tmp_rule_path.write_text("\n".join(desired_rules) + "\n", encoding="utf-8")
+            changed = True
+        else:
+            existing = tmp_rule_path.read_text(encoding="utf-8").splitlines()
+            with tmp_rule_path.open("a", encoding="utf-8") as f:
+                for line in desired_rules:
+                    if line not in existing:
+                        logger.info("Appending missing rule: %s", line)
+                        f.write(line + "\n")
+                        changed = True
+
+        if changed:
+            upload_existing_file(str(tmp_rule_path), "/etc/udev/rules.d/52-usb.rules", check=True)
+            run_command("udevadm control --reload-rules", False)
+            run_command("udevadm trigger --subsystem-match=usb", False)
+            logger.info("udev rules reloaded and triggered.")
+        else:
+            logger.info("No changes needed; rules already present.")
+
+        return changed
+
+    except Exception as e:
+        logger.exception("Failed to update USB permissions: %s", e)
+        return False
+
+
 def boot_config_get_or_append_section(config_content: List[str], section_name: str) -> Tuple[int, int]:
     regex_flags = re.IGNORECASE | re.DOTALL | re.MULTILINE
 
@@ -886,6 +925,7 @@ def main() -> int:
 
     patches_to_apply = [
         ("startup", update_startup),
+        ("usb_permissions", update_usb_permissions),
         ("userdata", ensure_user_data_structure_is_in_place),
         ("nginx", ensure_nginx_permissions),
         ("dns", create_dns_conf_host_link),

@@ -26,7 +26,9 @@ members = [
     "nmea-injector",
     "pardal",
     "ping",
+    "remora-camera-manager",
     "versionchooser",
+    "vesc-config-editor",
     "wifi",
 ]
 
@@ -273,7 +275,9 @@ dependencies = [
     { name = "nmea-injector" },
     { name = "pardal" },
     { name = "ping" },
+    { name = "remora-camera-manager" },
     { name = "versionchooser" },
+    { name = "vesc-config-editor" },
     { name = "wifi" },
 ]
 
@@ -294,7 +298,9 @@ requires-dist = [
     { name = "nmea-injector", virtual = "services/nmea_injector" },
     { name = "pardal", virtual = "services/pardal" },
     { name = "ping", virtual = "services/ping" },
+    { name = "remora-camera-manager", virtual = "services/remoraCameraManager" },
     { name = "versionchooser", virtual = "services/versionchooser" },
+    { name = "vesc-config-editor", virtual = "services/vescConfigEditor" },
     { name = "wifi", virtual = "services/wifi" },
 ]
 
@@ -1239,6 +1245,31 @@ wheels = [
 ]
 
 [[package]]
+name = "remora-camera-manager"
+version = "0.1.0"
+source = { virtual = "services/remoraCameraManager" }
+dependencies = [
+    { name = "anyio" },
+    { name = "commonwealth" },
+    { name = "fastapi" },
+    { name = "fastapi-versioning" },
+    { name = "loguru" },
+    { name = "pykson" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "anyio", specifier = "==3.7.1" },
+    { name = "commonwealth", editable = "libs/commonwealth" },
+    { name = "fastapi", specifier = "==0.105.0" },
+    { name = "fastapi-versioning", specifier = "==0.9.1" },
+    { name = "loguru", specifier = "==0.5.3" },
+    { name = "pykson", url = "https://github.com/patrickelectric/pykson/archive/refs/tags/1.0.2.tar.gz" },
+    { name = "uvicorn", specifier = "==0.13.4" },
+]
+
+[[package]]
 name = "requests"
 version = "2.25.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1467,6 +1498,35 @@ requires-dist = [
     { name = "pytest-asyncio", specifier = "==0.14.0" },
     { name = "werkzeug", specifier = "==2.2.3" },
     { name = "yarl", specifier = "==1.12.1" },
+]
+
+[[package]]
+name = "vesc-config-editor"
+version = "0.1.0"
+source = { virtual = "services/vescConfigEditor" }
+dependencies = [
+    { name = "anyio" },
+    { name = "commonwealth" },
+    { name = "fastapi" },
+    { name = "fastapi-versioning" },
+    { name = "loguru" },
+    { name = "pydantic" },
+    { name = "pyserial" },
+    { name = "requests" },
+    { name = "uvicorn" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "anyio", specifier = "==3.7.1" },
+    { name = "commonwealth", editable = "libs/commonwealth" },
+    { name = "fastapi", specifier = "==0.105.0" },
+    { name = "fastapi-versioning", specifier = "==0.9.1" },
+    { name = "loguru", specifier = "==0.5.3" },
+    { name = "pydantic", specifier = "==1.10.12" },
+    { name = "pyserial", specifier = "==3.5" },
+    { name = "requests", specifier = "==2.25.1" },
+    { name = "uvicorn", specifier = "==0.13.4" },
 ]
 
 [[package]]
