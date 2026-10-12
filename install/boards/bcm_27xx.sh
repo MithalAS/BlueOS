@@ -77,6 +77,7 @@ for STRING in \
     "enable_uart=1" \
     "gpio=11,24,25=op,pu,dh" \
     "gpio=37=op,pd,dl" \
+    "dtoverlay=disable-bt" \
     ; do \
     sed -i "$line_number r /dev/stdin" $CONFIG_FILE <<< "$STRING"
     # sed writes the string after this line number. Increase it, or the next string goes above the last one.
