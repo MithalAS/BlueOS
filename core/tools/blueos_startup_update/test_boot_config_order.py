@@ -5,6 +5,7 @@ import pytest
 from commonwealth.utils.general import CpuType
 from test_blueos_startup_update import (
     BOOKWORM,
+    DISTRIBUTIONS,
     NAVIGATOR_BOARDS,
     NAVIGATOR_INSTALL_SCRIPTS,
     Distribution,
@@ -100,6 +101,19 @@ def test_install_script_and_startup_patches_agree(distribution: Distribution, cp
     assert section_configuration(files[distribution.config_file], section_name) == section_configuration(
         installed_config, section_name
     )
+
+
+@pytest.mark.parametrize("distribution", DISTRIBUTIONS)
+def test_pi4_disables_bluetooth_and_loads_usb_overlay_once(distribution: Distribution) -> None:
+    installed_config = apply_install_script_section(NAVIGATOR_INSTALL_SCRIPTS[CpuType.PI4], distribution.stock_config)
+    files = stock_files(distribution)
+
+    apply_boot_config_patches(CpuType.PI4, distribution, files)
+
+    for config in (installed_config, files[distribution.config_file]):
+        section_lines = section_configuration(config, "pi4")
+        assert section_lines.count("dtoverlay=disable-bt") == 1
+        assert section_lines.count("dtoverlay=dwc2,dr_mode=otg") == 1
 
 
 @pytest.mark.parametrize("distribution, cpu_type", NAVIGATOR_BOARDS)
