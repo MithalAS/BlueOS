@@ -5,6 +5,7 @@ from typing import Any, List
 
 import aiohttp
 from commonwealth.settings.manager import Manager
+from commonwealth.utils.logs import cleanup_old_tlogs
 from loguru import logger
 
 from config import DEFAULT_EXTENSIONS, SERVICE_NAME
@@ -168,6 +169,7 @@ class Kraken:
             await self.setup_default_extensions()
             await self.kill_invalid_extensions()
             await self.kill_dangling_containers()
+            cleanup_old_tlogs("/root/.config/ardupilot-manager/logs")
 
             await asyncio.sleep(60)
 
