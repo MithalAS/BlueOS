@@ -70,7 +70,7 @@ for STRING in \
     "dtoverlay=uart5" \
     "dtoverlay=i2c1" \
     "dtoverlay=i2c4,pins_6_7,baudrate=1000000" \
-    "dtoverlay=i2c6,pins_22_23,baudrate=400000" \
+    "dtoverlay=i2c6,pins_22_23,baudrate=100000" \
     "dtoverlay=spi0-led" \
     "dtoverlay=spi1-3cs" \
     "dtoverlay=dwc2,dr_mode=otg" \
