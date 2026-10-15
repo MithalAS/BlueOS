@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# pylint: disable=too-many-lines
 import copy
 import json
 import logging
@@ -52,6 +53,8 @@ CONFIG_USER_PROTECTION_WORD = "custom"
 BOARD_SECTION_BY_CPU = {CpuType.PI4: "pi4", CpuType.PI5: "pi5"}
 
 BOOT_CONFIG_END_OVERLAY_SCOPE = "dtoverlay="
+BOOT_CONFIG_CUSTOM_INCLUDE = "include blueos-custom.txt"
+BOOT_CONFIG_CUSTOM_FOOTER = ["[all]", BOOT_CONFIG_END_OVERLAY_SCOPE, BOOT_CONFIG_CUSTOM_INCLUDE]
 
 config_file = None
 cmdline_file = None
@@ -273,6 +276,11 @@ def boot_config_normalize_section_order(
     config_content[section_start + 1 : section_end] = board_lines + user_lines
 
 
+def boot_config_ensure_custom_include(config_content: List[str]) -> None:
+    if not any(line.strip() == BOOT_CONFIG_CUSTOM_INCLUDE for line in config_content):
+        config_content.extend(["", *BOOT_CONFIG_CUSTOM_FOOTER])
+
+
 def navigator_managed_entries(cpu_type: CpuType) -> List[Tuple[str, str]]:
     # All dtparam lines come first. A dtparam below a dtoverlay changes that overlay, not the board.
     # An empty dtoverlay= closes the overlay above it. The dtparam lines below it then go to the board.
@@ -288,7 +296,8 @@ def navigator_managed_entries(cpu_type: CpuType) -> List[Tuple[str, str]]:
             ("dtoverlay=uart5", "^dtoverlay=uart5.*"),
             ("dtoverlay=i2c1", "^dtoverlay=i2c1.*"),
             ("dtoverlay=i2c4,pins_6_7,baudrate=1000000", "^dtoverlay=i2c4.*"),
-            ("dtoverlay=i2c6,pins_22_23,baudrate=400000", "^dtoverlay=i2c6.*"),
+            ("dtoverlay=xrm117x-i2c6", "^dtoverlay=xrm117x-i2c6.*"),
+            ("dtoverlay=i2c6,pins_22_23,baudrate=100000", "^dtoverlay=i2c6.*"),
             ("dtoverlay=spi0-led", "^dtoverlay=spi0.*"),
             ("dtoverlay=spi1-3cs", "^dtoverlay=spi1.*"),
             ("dtoverlay=dwc2,dr_mode=otg", "^[#]*dtoverlay=dwc2.*$"),
@@ -521,6 +530,7 @@ def update_dwc2() -> bool:
         config_content, dwc2_overlay_match_pattern, dwc2_overlay_config, section_name
     )
     boot_config_normalize_section_order(config_content, section_name, managed_entries)
+    boot_config_ensure_custom_include(config_content)
 
     # Save if needed, with backup
     backup_identifier = "before_update_dwc2"
@@ -581,6 +591,7 @@ def update_navigator_overlays() -> bool:
         )
 
     boot_config_normalize_section_order(config_content, section_name, managed_entries)
+    boot_config_ensure_custom_include(config_content)
 
     # Don't need to apply or restart if the content is the same
     if unpatched_config_content == config_content:

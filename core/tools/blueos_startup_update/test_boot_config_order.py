@@ -1,3 +1,5 @@
+import subprocess
+from pathlib import Path
 from typing import Dict, List
 
 import blueos_startup_update
@@ -8,6 +10,7 @@ from test_blueos_startup_update import (
     DISTRIBUTIONS,
     NAVIGATOR_BOARDS,
     NAVIGATOR_INSTALL_SCRIPTS,
+    REPOSITORY_PATH,
     Distribution,
     apply_boot_config_patches,
     install_script_configuration,
@@ -247,3 +250,129 @@ def test_board_section_rewrite_keeps_a_protected_line_and_a_plain_one(
     section_lines = section_configuration(files[distribution.config_file], section_name)
     assert section_lines.count(protected) == 1
     assert section_lines.count(user_line) == 1
+
+
+@pytest.mark.parametrize("distribution", DISTRIBUTIONS)
+def test_pi4_always_loads_xrm_before_i2c6_and_converges(distribution: Distribution) -> None:
+    files = stock_files(distribution)
+
+    applied = apply_boot_config_patches(CpuType.PI4, distribution, files)
+
+    xrm = "dtoverlay=xrm117x-i2c6"
+    lines = files[distribution.config_file].splitlines()
+    assert lines.count(xrm) == 1
+    section_lines = section_configuration(files[distribution.config_file], "pi4")
+    assert section_lines.index(xrm) < section_lines.index("dtoverlay=i2c6,pins_22_23,baudrate=100000")
+    assert any(applied.values())
+    patched = dict(files)
+    assert not any(apply_boot_config_patches(CpuType.PI4, distribution, files).values())
+    assert files == patched
+
+
+@pytest.mark.parametrize("distribution, cpu_type", NAVIGATOR_BOARDS)
+@pytest.mark.parametrize("stock_config", [True, False], ids=["stock-config", "minimal-config"])
+def test_custom_include_is_last_and_its_contents_are_not_managed(
+    distribution: Distribution, cpu_type: CpuType, stock_config: bool
+) -> None:
+    files = stock_files(distribution)
+    if not stock_config:
+        files[distribution.config_file] = ""
+    include = blueos_startup_update.BOOT_CONFIG_CUSTOM_INCLUDE
+    custom_path = str(Path(distribution.config_file).with_name("blueos-custom.txt"))
+    custom_content = "[pi4]\ndtoverlay=i2c6,pins_22_23,baudrate=100000\n"
+    files[custom_path] = custom_content
+
+    apply_boot_config_patches(cpu_type, distribution, files)
+
+    lines = files[distribution.config_file].splitlines()
+    assert lines[-3:] == blueos_startup_update.BOOT_CONFIG_CUSTOM_FOOTER
+    assert lines.count(include) == 1
+    assert files[custom_path] == custom_content
+    patched = dict(files)
+    assert not any(apply_boot_config_patches(cpu_type, distribution, files).values())
+    assert files == patched
+
+    # Editing the host file after deployment must not require changes to the image or managed config.
+    files[custom_path] = custom_content.replace("baudrate=100000", "baudrate=200000")
+    edited = dict(files)
+    assert not any(apply_boot_config_patches(cpu_type, distribution, files).values())
+    assert files == edited
+
+
+@pytest.mark.parametrize("distribution", DISTRIBUTIONS)
+def test_pi4_board_installer_moves_xrm_before_i2c6(distribution: Distribution, tmp_path: Path) -> None:
+    content = (REPOSITORY_PATH / NAVIGATOR_INSTALL_SCRIPTS[CpuType.PI4]).read_text(encoding="utf-8")
+    board_config = content.split("# Remove any configuration related to i2c", 1)[1].split(
+        "# Check for valid modules", 1
+    )[0]
+    board_config = "# Remove any configuration related to i2c" + board_config
+    config_file = tmp_path / "config.txt"
+    config_file.write_text(distribution.stock_config + "\n[all]\ndtoverlay=xrm117x-i2c6,addr=0x30\n", encoding="utf-8")
+
+    subprocess.run(
+        ["bash", "-c", f'set -e\nsudo() {{ "$@"; }}\nCONFIG_FILE="{config_file}"\n{board_config}'],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    config = config_file.read_text(encoding="utf-8")
+    xrm = "dtoverlay=xrm117x-i2c6"
+    assert config.splitlines().count(xrm) == 1
+    lines = section_configuration(config, "pi4")
+    assert lines.index(xrm) < lines.index("dtoverlay=i2c6,pins_22_23,baudrate=100000")
+
+
+@pytest.mark.parametrize("distribution", DISTRIBUTIONS)
+def test_kernel_installer_keeps_xrm_before_i2c6_and_custom_include_last(
+    distribution: Distribution, tmp_path: Path
+) -> None:
+    content = (REPOSITORY_PATH / "install/install.sh").read_text(encoding="utf-8")
+    kernel_config = (
+        'echo "Architecture: '
+        + content.split('echo "Architecture: ', 1)[1].split('echo "Installation finished successfully."', 1)[0]
+    )
+    kernel_config = kernel_config.replace("/boot", f"{tmp_path}/boot")
+    boot_path = tmp_path / distribution.config_file.lstrip("/")
+    boot_path.parent.mkdir(parents=True)
+    installed = apply_install_script_section(NAVIGATOR_INSTALL_SCRIPTS[CpuType.PI4], distribution.stock_config)
+    xrm = "dtoverlay=xrm117x-i2c6"
+    boot_path.write_text(installed, encoding="utf-8")
+    custom_file = boot_path.with_name("blueos-custom.txt")
+    custom_file.write_text("[pi4]\ndtparam=i2c_arm_baudrate=100000\n", encoding="utf-8")
+    custom_content = custom_file.read_text(encoding="utf-8")
+    architecture = "armv7l" if distribution.name == "bullseye" else "aarch64"
+    script = f"""
+set -e
+HOME="{tmp_path}"
+ARCHITECTURE={architecture}
+REMOTE=http://local
+VERSION=master
+SKIP_KERNEL_INSTALL=""
+wget() {{ return 0; }}
+sudo() {{
+    case "$1" in
+        dpkg|cp) return 0 ;;
+        *) "$@" ;;
+    esac
+}}
+{kernel_config}
+"""
+    for _ in range(2):
+        subprocess.run(["bash", "-c", script], check=True, capture_output=True, text=True)
+        config = boot_path.read_text(encoding="utf-8")
+        lines = section_configuration(config, "pi4")
+        assert lines.count(xrm) == 1
+        assert lines.index(xrm) < lines.index("dtoverlay=i2c6,pins_22_23,baudrate=100000")
+        assert config.splitlines()[-3:] == blueos_startup_update.BOOT_CONFIG_CUSTOM_FOOTER
+        assert config.splitlines().count(blueos_startup_update.BOOT_CONFIG_CUSTOM_INCLUDE) == 1
+        assert custom_file.read_text(encoding="utf-8") == custom_content
+
+
+def test_ensuring_custom_include_leaves_an_existing_reference_untouched() -> None:
+    lines = ["[pi4]", "dtoverlay=uart1", "", *blueos_startup_update.BOOT_CONFIG_CUSTOM_FOOTER, "dtparam=audio=on"]
+    original = lines.copy()
+
+    blueos_startup_update.boot_config_ensure_custom_include(lines)
+
+    assert lines == original

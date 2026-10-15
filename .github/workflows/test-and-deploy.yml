@@ -340,7 +340,7 @@ jobs:
               EXPECTED=("[pi5]" "dtoverlay=i2c3-pi5,baudrate=400000" "dtoverlay=spi1-3cs")
               ;;
             bcm_27xx)
-              EXPECTED=("[pi4]" "dtoverlay=i2c4,pins_6_7,baudrate=1000000" "dtoverlay=spi1-3cs")
+              EXPECTED=("[pi4]" "dtoverlay=i2c4,pins_6_7,baudrate=1000000" "dtoverlay=xrm117x-i2c6" "dtoverlay=i2c6,pins_22_23,baudrate=100000" "dtoverlay=spi1-3cs")
               ;;
             *)
               echo "Unknown board ${{ matrix.board }}, add the board configuration its image must contain."
