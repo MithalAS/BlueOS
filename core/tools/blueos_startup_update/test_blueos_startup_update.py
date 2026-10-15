@@ -389,7 +389,7 @@ def test_startup_patches_keep_distribution_configuration(distribution: Distribut
 
     assert section_names(files[distribution.config_file]) == section_names(distribution.stock_config) + (
         [] if f"[{section_name}]" in section_names(distribution.stock_config) else [f"[{section_name}]"]
-    ), "patching moved, dropped or duplicated a section"
+    ) + ["[all]"], "patching moved, dropped or duplicated a section other than the custom footer"
 
 
 @pytest.mark.parametrize("distribution, cpu_type", NAVIGATOR_BOARDS)

@@ -49,8 +49,8 @@ sudo()
 grep() { return 1; }
 
 # Exercise the actual kernel block without running host configuration or reboot.
-source <(sed -n '/^echo "Architecture: /,/^echo "Installation finished successfully\./{
-    /^echo "Installation finished successfully\./!p
+source <(sed -n '/^echo "Architecture: /,/^# Keep user experiments/{
+    /^# Keep user experiments/!p
 }' "$INSTALLER")
 printf 'configured %s %s\n' "$CONFIG_TXT_PATH" "$KERNEL_LINE" >> "$TRACE"
 BASH
