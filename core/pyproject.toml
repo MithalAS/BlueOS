@@ -16,6 +16,7 @@ dependencies = [
   "helper",
   "kraken",
   "log_zipper",
+  "modbus",
   "nmea_injector",
   "pardal",
   "ping",
@@ -43,6 +44,7 @@ commander = { workspace = true }
 helper = { workspace = true }
 kraken = { workspace = true }
 log_zipper = { workspace = true }
+modbus = { workspace = true }
 nmea_injector = { workspace = true }
 pardal = { workspace = true }
 ping = { workspace = true }

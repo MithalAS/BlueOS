@@ -32,6 +32,7 @@ SERVICES=(
     versionchooser
     vescConfigEditor
     remoraCameraManager
+    modbus
     wifi
 )
 

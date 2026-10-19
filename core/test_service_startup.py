@@ -8,7 +8,7 @@ import pytest
 CORE_PATH = Path(__file__).parent
 
 
-@pytest.mark.parametrize("service", ["vescConfigEditor", "remoraCameraManager"])
+@pytest.mark.parametrize("service", ["vescConfigEditor", "remoraCameraManager", "modbus"])
 def test_service_starts_as_blueos_with_runtime_environment(service: str) -> None:
     startup = (CORE_PATH / "start-blueos-core").read_text(encoding="utf-8")
     assignments = []
