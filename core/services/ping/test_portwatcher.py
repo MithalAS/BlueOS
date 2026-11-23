@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 _PING_DIR = str(Path(__file__).resolve().parent)
@@ -14,6 +15,16 @@ for _name in ("exceptions", "pingutils", "ping360_ethernet_prober", "portwatcher
 import pytest
 
 from portwatcher import PortWatcher
+
+
+def test_interface_board_is_not_probed() -> None:
+    watcher = PortWatcher(probe_callback=AsyncMock(), found_callback=AsyncMock())
+    port = SimpleNamespace(manufacturer="Remora Robotics", product="POD Interface Board", vid=0x0483, pid=0x5740)
+    assert not watcher.port_should_be_probed(port)
+    port.product = "Another device"
+    # Real serial port descriptors are hashable.
+    port = type("Port", (), vars(port))()
+    assert watcher.port_should_be_probed(port)
 
 
 @pytest.mark.asyncio

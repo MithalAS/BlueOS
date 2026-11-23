@@ -14,6 +14,7 @@ dependencies = [
   "cable_guy",
   "commander",
   "helper",
+  "interface-board",
   "kraken",
   "log_zipper",
   "nmea_injector",
@@ -41,6 +42,7 @@ bridget = { workspace = true }
 cable_guy = { workspace = true }
 commander = { workspace = true }
 helper = { workspace = true }
+interface-board = { workspace = true }
 kraken = { workspace = true }
 log_zipper = { workspace = true }
 nmea_injector = { workspace = true }

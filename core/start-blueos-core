@@ -120,6 +120,7 @@ SERVICES=(
     'beacon',250,"$SERVICES_PATH/beacon/main.py"
     'bridget',0,"nice -19 $RUN_AS_REGULAR_USER_BEGIN $SERVICES_PATH/bridget/main.py $RUN_AS_REGULAR_USER_END"
     'vescConfigEditor',0,"nice -19 $RUN_AS_REGULAR_USER_BEGIN $SERVICES_PATH/vescConfigEditor/main.py $RUN_AS_REGULAR_USER_END"
+    'interfaceBoard',0,"nice -19 $RUN_AS_REGULAR_USER_BEGIN $SERVICES_PATH/interfaceBoard/main.py $RUN_AS_REGULAR_USER_END"
     'remoraCameraManager',0,"nice -19 $RUN_AS_REGULAR_USER_BEGIN $SERVICES_PATH/remoraCameraManager/main.py $RUN_AS_REGULAR_USER_END"
     'commander',250,"$SERVICES_PATH/commander/main.py"
     'nmea_injector',250,"nice -19 $SERVICES_PATH/nmea_injector/main.py"
