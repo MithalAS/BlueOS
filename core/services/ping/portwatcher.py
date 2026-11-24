@@ -3,6 +3,7 @@ from typing import Any, Callable, Coroutine, Dict, Optional, Set
 from warnings import warn
 
 import serial.tools.list_ports
+from commonwealth.utils.interface_board import is_interface_board
 from loguru import logger
 from serial.tools.list_ports_linux import SysFS
 
@@ -39,7 +40,7 @@ class PortWatcher:
         """A port should be probed if there hasn't been MAX_ATTEMPTS to probe it yet
         and it is caught by our filters
         """
-        if port in self.known_ports:
+        if is_interface_board(port) or port in self.known_ports:
             return False
         if self.probe_attempts_counter.get(port, 0) >= MAX_ATTEMPTS:
             return False
